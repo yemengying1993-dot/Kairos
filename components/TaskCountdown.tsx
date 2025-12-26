@@ -1,23 +1,20 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 interface TaskCountdownProps {
-  duration: number; // minutes
+  initialSeconds: number;
   onComplete: () => void;
 }
 
-const TaskCountdown: React.FC<TaskCountdownProps> = ({ duration, onComplete }) => {
-  // Initialize with duration in seconds
-  const [timeLeft, setTimeLeft] = useState(duration * 60);
+const TaskCountdown: React.FC<TaskCountdownProps> = ({ initialSeconds, onComplete }) => {
+  const [timeLeft, setTimeLeft] = useState(initialSeconds);
   const onCompleteRef = useRef(onComplete);
 
-  // Keep ref up to date to avoid effect dependency issues
   useEffect(() => {
     onCompleteRef.current = onComplete;
   }, [onComplete]);
 
   useEffect(() => {
-    // If somehow initialized with 0, complete immediately
     if (timeLeft <= 0) {
       onCompleteRef.current();
       return;
@@ -28,7 +25,6 @@ const TaskCountdown: React.FC<TaskCountdownProps> = ({ duration, onComplete }) =
         const next = prev - 1;
         if (next <= 0) {
           clearInterval(timer);
-          // Small delay to let the UI show 00:00 before transitioning
           setTimeout(() => onCompleteRef.current(), 500);
           return 0;
         }
@@ -37,11 +33,12 @@ const TaskCountdown: React.FC<TaskCountdownProps> = ({ duration, onComplete }) =
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []); // Only start timer on mount
+  }, []); // Sync only on mount to prevent reset during UI updates
 
   const format = (totalSeconds: number) => {
-    const m = Math.floor(totalSeconds / 60);
-    const s = totalSeconds % 60;
+    const total = Math.max(0, totalSeconds);
+    const m = Math.floor(total / 60);
+    const s = Math.floor(total % 60);
     return {
       m: m.toString().padStart(2, '0'),
       s: s.toString().padStart(2, '0')

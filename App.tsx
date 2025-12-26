@@ -1,11 +1,9 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
-  Plus, ArrowRight, Clock, Zap, Lock, X, Wind, Sparkles, Trash2, Calendar, Target, 
-  ArrowLeft, Sun, Moon, Timer, Check, Coffee, BatteryCharging, Info, 
-  Play, Pause, Volume2, CheckCircle2, Star, MessageSquare,
-  CloudRain, Coffee as CoffeeIcon, Waves, Music, BellRing, Settings2, Edit3,
-  ChevronLeft, Mic, MicOff, BarChart3, History, Award, TrendingUp, Loader2, MousePointer2
+  Plus, ArrowRight, Clock, Zap, Lock, X, Wind, Trash2, Calendar, 
+  ArrowLeft, Timer, Check, CheckCircle2, MessageSquare,
+  Play, ChevronLeft, Loader2, BarChart3, Sun, Moon, History as HistoryIcon,
+  BarChart as BarChart3Icon // Actually BarChart3 is a valid export, but I'll ensure all are listed.
 } from 'lucide-react';
 import { AppState, EnergyLevel, Task, DailyRecord } from './types';
 import { getDynamicSchedule } from './services/geminiService';
@@ -124,7 +122,7 @@ const App: React.FC = () => {
     localStorage.setItem('kairos_active_hours', JSON.stringify(activeHours));
   }, [fixedTasks, wishes, activeHours]);
 
-  // 计算当前正在进行的任务及其剩余时间
+  // Calculate currently active task and precise remaining minutes
   const activeTask = useMemo(() => {
     if (tasks.length === 0) return null;
     const nowMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
@@ -141,7 +139,9 @@ const App: React.FC = () => {
       const [h, m] = task.startTime!.split(':').map(Number);
       const endMinutes = (h * 60 + m) + task.duration;
       const remaining = endMinutes - nowMinutes;
-      return { ...task, remainingMinutes: Math.max(1, remaining) };
+      // Also calculate seconds for higher precision in countdown
+      const remainingSeconds = (endMinutes * 60) - (currentTime.getHours() * 3600 + currentTime.getMinutes() * 60 + currentTime.getSeconds());
+      return { ...task, remainingMinutes: Math.max(1, remaining), remainingSeconds: Math.max(1, remainingSeconds) };
     }
     return null;
   }, [tasks, currentTime]);
@@ -150,10 +150,7 @@ const App: React.FC = () => {
     setLoading(true);
     setEnergy(score);
     try {
-      const dateObj = new Date(selectedDate);
-      const dayIndex = dateObj.getDay();
-      const relevantFixed = fixedTasks.filter(t => t.recurringDays?.includes(dayIndex));
-      const scheduled = await getDynamicSchedule(score, [...relevantFixed, ...wishes], activeHours);
+      const scheduled = await getDynamicSchedule(score, [...fixedTasks.filter(t => t.recurringDays?.includes(new Date().getDay())), ...wishes], activeHours);
       if (scheduled && Array.isArray(scheduled)) {
         const newTasks = scheduled.map((t: any) => ({
           ...t, 
@@ -164,10 +161,7 @@ const App: React.FC = () => {
         setState('dashboard');
       }
     } catch (e) {
-      const dateObj = new Date(selectedDate);
-      const dayIndex = dateObj.getDay();
-      const relevantFixed = fixedTasks.filter(t => t.recurringDays?.includes(dayIndex));
-      setTasks(relevantFixed.map(t => ({ ...t, isCompleted: false })));
+      setTasks(fixedTasks.filter(t => t.recurringDays?.includes(new Date().getDay())).map(t => ({ ...t, isCompleted: false })));
       setState('dashboard');
     } finally {
       setLoading(false);
@@ -233,10 +227,10 @@ const App: React.FC = () => {
 
   const renderMonkMode = () => {
     const task = tasks.find(t => t.id === focusedTaskId);
-    // 使用计算出的实际剩余分钟数，如果无法计算则退回到 duration
-    let monkDuration = task?.duration || 25;
+    // Determine the precise duration to show
+    let initialSeconds = (task?.duration || 25) * 60;
     if (task && task.id === activeTask?.id) {
-      monkDuration = activeTask.remainingMinutes;
+      initialSeconds = activeTask.remainingSeconds;
     }
     
     return (
@@ -248,7 +242,7 @@ const App: React.FC = () => {
           </div>
           <h2 className="text-4xl sm:text-6xl font-black text-white italic tracking-tighter">{task?.title || '专注当下'}</h2>
         </div>
-        <TaskCountdown duration={monkDuration} onComplete={completeFocusTask} />
+        <TaskCountdown key={focusedTaskId} initialSeconds={initialSeconds} onComplete={completeFocusTask} />
         <div className="flex flex-col items-center gap-8">
           <p className="text-soul-muted/40 italic text-base sm:text-lg max-w-md text-center">此时此刻，全世界只有你和这项任务。关闭所有干扰，回归纯粹。</p>
           <div className="flex gap-4">
@@ -285,8 +279,8 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="flex gap-2">
-             <button onClick={() => setState('report')} title="每周结案总结" className="px-4 py-2.5 soul-glass rounded-xl flex items-center gap-2 text-[10px] font-black text-soul-amber border border-soul-amber/20 hover:bg-soul-amber/10 transition-all"><BarChart3 size={16} /><span className="hidden sm:inline">每周总结</span></button>
-             <button onClick={() => setState('review')} title="每日晚间结案" className="px-4 py-2.5 soul-glass rounded-xl flex items-center gap-2 text-[10px] font-black text-soul-muted hover:text-white transition-all border border-white/10"><CheckCircle2 size={16} /><span className="hidden sm:inline">每日总结</span></button>
+             <button onClick={() => setState('report')} className="px-4 py-2.5 soul-glass rounded-xl flex items-center gap-2 text-[10px] font-black text-soul-amber border border-soul-amber/20 hover:bg-soul-amber/10 transition-all"><BarChart3 size={16} /><span className="hidden sm:inline">每周总结</span></button>
+             <button onClick={() => setState('review')} className="px-4 py-2.5 soul-glass rounded-xl flex items-center gap-2 text-[10px] font-black text-soul-muted hover:text-white transition-all border border-white/10"><CheckCircle2 size={16} /><span className="hidden sm:inline">每日复盘</span></button>
              <button onClick={() => setState('checkin')} className="w-10 h-10 soul-glass rounded-xl flex items-center justify-center text-soul-glow border border-soul-glow/20 hover:bg-soul-glow/10 transition-all"><Zap size={18} /></button>
           </div>
         </div>
@@ -326,7 +320,7 @@ const App: React.FC = () => {
 
           {tasks.length === 0 ? (
             <div className="py-20 text-center space-y-6 animate-in fade-in">
-               <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto text-white/10"><History size={32} /></div>
+               <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto text-white/10"><HistoryIcon size={32} /></div>
                <p className="text-white/30 text-lg italic font-medium">尚未同步今日能量流转</p>
                <button onClick={() => setState('checkin')} className="px-10 py-4 bg-soul-glow text-soul-deep rounded-xl font-black shadow-glow active:scale-95 transition-all text-base">即刻同步</button>
             </div>
@@ -521,15 +515,14 @@ const App: React.FC = () => {
         <button onClick={() => setState('dashboard')} className="absolute top-10 left-10 px-6 py-3 soul-glass rounded-xl text-white/50 hover:text-white transition-all flex items-center gap-2 font-black border-white/10"><ArrowLeft size={18} /> 返回</button>
         <div className="soul-glass p-8 sm:p-12 rounded-[2.5rem] border-white/10 max-w-xl w-full space-y-10 shadow-glow-lg my-12">
             <div className="space-y-3">
-              <div className="inline-block px-4 py-1.5 soul-glass rounded-full text-soul-glow text-[10px] font-black uppercase tracking-widest border border-soul-glow/30 shadow-glow">每日总结</div>
+              <div className="inline-block px-4 py-1.5 soul-glass rounded-full text-soul-glow text-[10px] font-black uppercase tracking-widest border border-soul-glow/30 shadow-glow">每日复盘</div>
               <h2 className="text-4xl sm:text-5xl font-black italic tracking-tighter leading-none">晚间结案</h2>
               <p className="text-soul-muted italic text-base sm:text-lg">今日能量流转：{completionRate}% 达成</p>
             </div>
 
-            {/* 今日流转清单 */}
             <div className="space-y-4 text-left max-h-[30vh] overflow-y-auto pr-2 custom-scrollbar">
                <span className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em] px-2">流转清单</span>
-               {tasks.map(t => (
+               {tasks.length > 0 ? tasks.map(t => (
                  <div key={t.id} className="flex items-center justify-between p-4 soul-glass rounded-2xl border-white/5">
                    <div className="flex items-center gap-3">
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.isCompleted ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-white/20'}`}>
@@ -539,15 +532,15 @@ const App: React.FC = () => {
                    </div>
                    <span className="text-[10px] text-white/20 font-mono">{t.startTime}</span>
                  </div>
-               ))}
+               )) : <p className="text-center text-white/10 py-4 italic">暂无任务数据</p>}
             </div>
 
             <div className="space-y-4 text-left">
-               <span className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em] px-2">明日的一个愿景</span>
+               <span className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em] px-2">明日愿景</span>
                <input placeholder="写下明日的一个关键指向..." className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-white font-black text-lg focus:border-soul-glow/50 outline-none transition-all" />
             </div>
 
-            <button onClick={() => setState('dashboard')} className="w-full py-6 bg-soul-glow text-soul-deep rounded-[1.8rem] sm:rounded-[3rem] font-black text-xl sm:text-2xl shadow-glow active:scale-95 transition-all">锁定今日状态</button>
+            <button onClick={() => setState('dashboard')} className="w-full py-6 bg-soul-glow text-soul-deep rounded-[1.8rem] sm:rounded-[3rem] font-black text-xl sm:text-2xl shadow-glow active:scale-95 transition-all">锁定复盘</button>
         </div>
       </div>
     );
@@ -558,7 +551,7 @@ const App: React.FC = () => {
        <div className="max-w-2xl mx-auto py-8 space-y-8">
           <div className="flex justify-between items-center px-2">
             <button onClick={() => setState('dashboard')} className="p-3 soul-glass rounded-xl text-white/50 hover:text-white transition-all"><ChevronLeft size={20}/></button>
-            <h2 className="text-2xl sm:text-3xl font-black italic">每周总结结案</h2>
+            <h2 className="text-2xl sm:text-3xl font-black italic">每周总结</h2>
             <div className="w-10 h-10" />
           </div>
           <div className="soul-glass p-8 rounded-[2rem] border-white/5 shadow-2xl space-y-6">
@@ -570,7 +563,7 @@ const App: React.FC = () => {
                <p className="text-soul-muted/80 italic leading-relaxed text-sm">“本周你在‘固定日程’上表现出色。普拉提达成率100%。愿望池的学习任务在周三有所松懈，建议下周增加该时段的‘转场缓冲’。”</p>
              </div>
           </div>
-          <button onClick={() => setState('dashboard')} className="w-full py-5 bg-white text-soul-deep rounded-2xl font-black text-lg shadow-xl hover:bg-soul-glow transition-all">收下结案反馈</button>
+          <button onClick={() => setState('dashboard')} className="w-full py-5 bg-white text-soul-deep rounded-2xl font-black text-lg shadow-xl hover:bg-soul-glow transition-all">收下建议</button>
        </div>
     </div>
   );

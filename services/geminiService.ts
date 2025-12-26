@@ -70,22 +70,11 @@ export const getDynamicSchedule = async (
 - 原始任务池（包含固定锚点和愿望任务）：
 ${JSON.stringify(baseTasks)}
 
-# 调度原则 (Constraints)
-1. 【固定日程优先】：所有 "isHardBlock: true" 的任务必须保留其原始 startTime 和 duration，它们是全天的锚点。
-2. 【愿望填充】：在固定日程之间的空白时间段，挑选愿望池 (isWish: true) 中的任务进行填充。
-3. 【能量匹配】：
-   - high 能耗任务（如深度学习、工作）必须安排在能量评分对应的“黄金时段”。
-   - low 能耗任务安排在过渡期。
-4. 【灵活休息与自我关怀】：
-   - 如果评分低 (1-2)，必须大幅增加“低能耗”休息块，如：冥想、小睡、听轻音乐、5分钟拉伸。
-   - 如果评分高 (4-5)，可以安排更密集的愿望任务，但每完成一个高能耗任务，必须插入 10 分钟的“无脑时间”（如刷会儿感兴趣但不沉迷的内容、发呆）。
-5. 【ADHD 友好过渡】：
-   - 严禁任务切换时没有缓冲区。任务之间建议插入 5-15 分钟的“转场缓冲”。
-   - 任务块建议控制在 25-90 分钟之间。
-
-# 输出要求
-请返回一个 JSON 数组，必须包含且仅包含以下字段：id, title, duration, energyCost, isHardBlock, startTime。
-确保全天时间线逻辑连贯，不重叠，且覆盖全天活跃窗口。
+# 调度原则
+1. 固定日程优先。
+2. 在空白处填充愿望任务。
+3. 高能耗任务放在高能量时段。
+4. 确保任务间有 5-10 分钟缓冲。
 `;
 
   const response = await ai.models.generateContent({
@@ -121,12 +110,9 @@ export const chatWithAssistant = async (
 ) => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const systemInstruction = `
-你名叫 Kairos，一位温馨、非指责型的个人能量管理专家。
-你服务的是有 ADHD 倾向的用户，说话要简练、事实驱动。
-你可以调用工具来添加固定日程、修改愿望池、或调整今天的任务。
+你名叫 Kairos，一位温馨的个人能量助手。
 当前时间：${new Date().toLocaleTimeString()}
-当前电量：${context.energy}/5。
-今日任务状态：${JSON.stringify(context.tasks.map(t => ({ title: t.title, time: t.startTime, completed: t.isCompleted })))}
+今日任务：${JSON.stringify(context.tasks.map(t => ({ title: t.title, time: t.startTime, completed: t.isCompleted })))}
 `;
   
   const chat = ai.chats.create({ 
