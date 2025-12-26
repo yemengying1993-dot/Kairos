@@ -1,0 +1,136 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>Kairos | 捕捉你的流转瞬间</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=Quicksand:wght@300;500;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+          theme: {
+            extend: {
+              colors: {
+                soul: {
+                  deep: '#0B1026',
+                  glow: '#7DF9FF',
+                  purple: '#8A2BE2',
+                  amber: '#FFBF00',
+                  muted: '#B19CD9',
+                }
+              },
+              dropShadow: {
+                'glow': '0 0 15px rgba(125, 249, 255, 0.5)',
+                'glow-lg': '0 0 35px rgba(125, 249, 255, 0.3)',
+              },
+              animation: {
+                'float': 'float 6s ease-in-out infinite',
+                'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                'fade-in': 'fadeIn 0.5s ease-out forwards',
+              },
+              keyframes: {
+                float: {
+                  '0%, 100%': { transform: 'translateY(0px)' },
+                  '50%': { transform: 'translateY(-10px)' },
+                },
+                fadeIn: {
+                  '0%': { opacity: '0', transform: 'translateY(10px)' },
+                  '100%': { opacity: '1', transform: 'translateY(0)' },
+                }
+              }
+            }
+          }
+        }
+    </script>
+    <style type="text/css">
+        body {
+            font-family: 'Quicksand', 'Noto Sans SC', sans-serif;
+            background: #0B1026;
+            background-image: radial-gradient(circle at top right, #1A1F3C, #0B1026);
+            color: #E0E7FF;
+            margin: 0;
+            overflow-x: hidden;
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .soul-glass {
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .soul-gradient-text {
+            background: linear-gradient(to right, #7DF9FF, #B19CD9);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(125, 249, 255, 0.3);
+            border-radius: 10px;
+        }
+        .focus-ring {
+            transition: stroke-dashoffset 0.8s ease-out;
+        }
+        /* 时间输入框优化 */
+        input[type="time"] {
+            color-scheme: dark;
+            background: transparent;
+            border: none;
+            outline: none;
+            padding: 4px;
+            margin: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+            display: block;
+            font-family: 'Quicksand', monospace;
+            font-weight: 900;
+        }
+        input[type="time"]::-webkit-calendar-picker-indicator {
+            background: transparent;
+            bottom: 0;
+            color: transparent;
+            cursor: pointer;
+            height: auto;
+            left: 0;
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: auto;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(125, 249, 255, 0.2);
+            border-radius: 10px;
+        }
+        @keyframes float {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-8px); }
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "d3": "https://esm.sh/d3@^7.9.0"
+  }
+}
+</script>
+</head>
+<body>
+    <div id="root"></div>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "name": "Kairos",
+  "description": "Kairos (Ancient Greek: καιρός) - The opportune moment. A state-driven energy management companion for the executive dysfunctioned, helping you reclaim your flow through AI-optimized scheduling and deep focus.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
