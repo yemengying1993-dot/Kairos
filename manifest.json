@@ -1,0 +1,17 @@
+{
+  "name": "Kairos Energy Assistant",
+  "short_name": "Kairos",
+  "description": "Capture the opportune moment. AI-driven energy management.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0B1026",
+  "theme_color": "#0B1026",
+  "icons": [
+    {
+      "src": "logo.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

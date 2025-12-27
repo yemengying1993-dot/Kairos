@@ -60,8 +60,8 @@ const App: React.FC = () => {
 
   const [fixedTasks, setFixedTasks] = useState<Task[]>(() => loadStored('kairos_fixed_tasks', [
     { id: 'f-0', title: '营养早餐', duration: 30, energyCost: 'low', isHardBlock: true, startTime: '09:00', endTime: '09:30', recurringDays: [0, 1, 2, 3, 4, 5, 6] },
-    { id: 'f-1', title: '下午茶/能量供给', duration: 30, energyCost: 'low', isHardBlock: true, startTime: '15:00', endTime: '15:30', recurringDays: [0, 1, 2, 3, 4, 5, 6] },
-    { id: 'f-2', title: '营养晚餐', duration: 60, energyCost: 'low', isHardBlock: true, startTime: '18:30', endTime: '19:30', recurringDays: [0, 1, 2, 3, 4, 5, 6] }
+    { id: 'f-p', title: '普拉提私教课', duration: 120, energyCost: 'high', isHardBlock: true, startTime: '12:00', endTime: '14:00', recurringDays: [1, 3, 5] },
+    { id: 'f-2', title: '营养晚餐', duration: 60, energyCost: 'low', isHardBlock: true, startTime: '16:30', endTime: '17:30', recurringDays: [0, 1, 2, 3, 4, 5, 6] }
   ]));
 
   const [wishes, setWishes] = useState<Task[]>(() => loadStored('kairos_wishes', [
