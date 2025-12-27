@@ -472,7 +472,33 @@ const App: React.FC = () => {
       )}
 
       <button onClick={() => setIsChatOpen(true)} className="fixed bottom-6 right-6 w-16 h-16 sm:w-20 sm:h-20 soul-glass text-soul-glow rounded-full shadow-glow-lg flex items-center justify-center z-50 animate-float border border-soul-glow/20 active:scale-90 transition-all"><MessageSquare size={28} /></button>
-      <AIChatDrawer isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} energy={energy} tasks={tasks} onAddFixed={(t) => setFixedTasks(prev => [...prev, { ...t, id: Math.random().toString(36).substr(2,9), isHardBlock: true } as Task])} onAddWish={(t) => setWishes(prev => [...prev, { ...t, id: Math.random().toString(36).substr(2,9), isWish: true } as Task])} onModifyHours={(h) => setActiveHours(prev => ({...prev, ...h}))} onModifyToday={(t) => setTasks(prev => [...prev, { ...t, id: Math.random().toString(36).substr(2,9), isCompleted: false } as Task].sort((a,b)=>(a.startTime||'').localeCompare(b.startTime||'')))} />
+      <AIChatDrawer 
+        isOpen={isChatOpen} 
+        onClose={() => setIsChatOpen(false)} 
+        energy={energy} 
+        tasks={tasks} 
+        onAddFixed={(t) => setFixedTasks(prev => [...prev, { ...t, id: Math.random().toString(36).substr(2,9), isHardBlock: true } as Task])} 
+        onAddWish={(t) => setWishes(prev => [...prev, { ...t, id: Math.random().toString(36).substr(2,9), isWish: true } as Task])} 
+        onModifyHours={(h) => setActiveHours(prev => ({...prev, ...h}))} 
+        onModifyToday={(t) => setTasks(prev => {
+          const newTask: Task = {
+            id: Math.random().toString(36).substr(2, 9),
+            title: t.title || '新任务',
+            duration: t.duration || 30,
+            energyCost: t.energyCost || 'medium',
+            isHardBlock: false,
+            startTime: t.startTime || '09:00',
+            isCompleted: false,
+            description: t.description || '',
+          };
+          return [...prev, newTask].sort((a,b)=>(a.startTime||'').localeCompare(b.startTime||''));
+        })}
+        onRemoveTask={(title) => {
+          setTasks(prev => prev.filter(t => !t.title.includes(title)));
+          setFixedTasks(prev => prev.filter(t => !t.title.includes(title)));
+          setWishes(prev => prev.filter(t => !t.title.includes(title)));
+        }}
+      />
     </div>
   );
 

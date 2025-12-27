@@ -4,7 +4,7 @@ import { Task, EnergyLevel, ChatMessage } from "../types";
 const controlScheduleTools: FunctionDeclaration[] = [
   {
     name: "add_fixed_task",
-    description: "添加一个新的周循环固定日程（锚点任务）。",
+    description: "添加一个新的周循环固定日程（锚点任务）。适用于用户想要长期、每天或每周重复的习惯。",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -23,7 +23,7 @@ const controlScheduleTools: FunctionDeclaration[] = [
   },
   {
     name: "add_wish_task",
-    description: "将任务加入愿望池（非固定时间的长期目标）。",
+    description: "将任务加入愿望池（非固定时间的长期目标）。适用于用户想做但没定好具体时间的事。",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -36,16 +36,28 @@ const controlScheduleTools: FunctionDeclaration[] = [
   },
   {
     name: "modify_today_plan",
-    description: "直接修改用户今天的实时时间规划（临时插入或修改今日任务）。",
+    description: "直接修改用户今天的实时时间规划（临时插入、修改或覆盖今日的某个时段）。",
     parameters: {
       type: Type.OBJECT,
       properties: {
         title: { type: Type.STRING, description: "任务标题" },
         startTime: { type: Type.STRING, description: "开始时间 HH:mm" },
         duration: { type: Type.NUMBER, description: "持续分钟" },
-        energyCost: { type: Type.STRING, enum: ["low", "medium", "high"] }
+        energyCost: { type: Type.STRING, enum: ["low", "medium", "high"] },
+        description: { type: Type.STRING, description: "任务的温馨提示" }
       },
       required: ["title", "startTime", "duration"]
+    }
+  },
+  {
+    name: "remove_task",
+    description: "删除一个任务。可以删除今日计划中的任务、固定日程或愿望池中的任务。",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        title: { type: Type.STRING, description: "要删除的任务标题（支持模糊匹配）" }
+      },
+      required: ["title"]
     }
   }
 ];
@@ -65,33 +77,34 @@ export const getDynamicSchedule = async (
 生成一份从 ${activeWindow.start} 到 ${activeWindow.end} 的【无缝能量流日程】。
 
 # 输入数据
-- 今日能量评分：${energy}/5 (1=极其疲惫/阻力大, 5=精力充沛/心流状态)
+- 今日能量评分：${energy}/5 (1=极其疲惫, 5=精力充沛)
 - 原始任务池：${JSON.stringify(baseTasks)}
 
 # 核心调度原则 (核心逻辑)
-1. **标题严格一致性 (Title Strictness) - 重要**：
-   - 对于原始任务池中的所有任务，其标题（title）**必须完全保留你输入的原始文字**。
-   - **绝对禁止**进行任何修改、扩充、重写或添加后缀（例如严禁添加“第一阶段”、“Part 1”、“（拆分）”等）。
-   - 用户希望看到的是他们自己定义的任务名称，不要自作聪明。
 
-2. **能量守恒与节奏控速 (Energy Rhythm)**：
-   - **绝对禁止**安排连续超过 2 个 'high' 能耗的任务。
-   - 如果两个 'high' 能耗任务之间没有其他任务，你**必须强制插入**一个名为“能量留白”的 15 分钟任务（能耗设为 'low'）。
-   - 这是为了防止大脑过度疲劳导致执行功能崩溃。
+1. **固定任务（锚点）绝对锁定**：
+   - 对于 \`isHardBlock: true\` 的任务，**必须**保留原始的 startTime。严禁移动时间。
+   - 标题必须与输入保持 100% 一致。
 
-3. **动态调整**：
-   - 能量 < 3 时：优先安排 'low' 和 'medium' 任务。
-   - 能量 >= 4 时：在固定日程之间密集穿插愿望池中的任务。
+2. **精简且温暖的描述 (Concise Description)**：
+   - **每一项任务**都必须提供 \`description\`。
+   - 描述要**简洁、精炼**，用一两句话提供温暖的行动建议或鼓励。
+   - **严禁**使用“调度意图”、“行动提示”等生硬的分段标签，直接书写内容。
 
-4. **原子化拆分**：
-   - 如果某个愿望池任务时间太长需要拆分，拆分后的每一个子任务**标题必须完全相同**，不要加任何编号或后缀。
+3. **标题严格一致性**：
+   - 原始任务池任务的标题（title）**严禁**修改、扩充或添加后缀。
 
-5. **描述具体化**：请在 description 中简述调度意图。
+4. **禁止虚构任务**：
+   - 严禁添加输入中不存在的任务（如午餐等）。唯一允许添加的是“能量留白”。
+
+5. **能量调度**：
+   - 禁止安排连续超过 2 个 'high' 任务。
+   - 必要时强制插入 15 分钟的“能量留白”。
 
 # 约束
 - 格式：JSON 数组。
-- 时间 HH:mm，严禁重叠。
-- 确保涵盖所有固定任务 (isHardBlock: true)。
+- 时间 HH:mm 格式，严禁任务重叠。
+- 确保涵盖所有 \`isHardBlock: true\` 的固定任务。
 `;
 
   const stream = await ai.models.generateContentStream({
@@ -106,13 +119,13 @@ export const getDynamicSchedule = async (
           properties: {
             id: { type: Type.STRING },
             title: { type: Type.STRING },
-            description: { type: Type.STRING },
+            description: { type: Type.STRING, description: "精简温暖的任务建议，无需标签" },
             duration: { type: Type.NUMBER },
             energyCost: { type: Type.STRING, enum: ['high', 'medium', 'low'] },
             isHardBlock: { type: Type.BOOLEAN },
             startTime: { type: Type.STRING }
           },
-          required: ["id", "title", "duration", "energyCost", "isHardBlock", "startTime"]
+          required: ["id", "title", "description", "duration", "energyCost", "isHardBlock", "startTime"]
         }
       }
     }
@@ -123,7 +136,12 @@ export const getDynamicSchedule = async (
     fullText += chunk.text || "";
   }
 
-  return JSON.parse(fullText.trim() || "[]");
+  try {
+    return JSON.parse(fullText.trim() || "[]");
+  } catch (e) {
+    console.error("JSON Parsing failed for schedule:", fullText);
+    return [];
+  }
 };
 
 export const getWeeklyInsight = async (stats: { completionRate: number, focusMinutes: number, topTasks: string[] }) => {
@@ -149,14 +167,39 @@ export const chatWithAssistant = async (
   context: { energy: EnergyLevel | null; tasks: Task[] }
 ) => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const systemInstruction = `你名叫 Kairos，一位温馨的个人能量助手。不要提及医学诊断词汇。保持温暖、包容。`;
+  
+  const contextSummary = `
+用户当前能量状态: ${context.energy || '未同步'}/5
+今日任务流: ${context.tasks.map(t => `${t.startTime} ${t.title}(${t.isCompleted ? '已完成' : '待办'})`).join(', ')}
+`;
+
+  const systemInstruction = `你名叫 Kairos，一位温馨的个人能量助手。
+你的目标是帮助用户动态管理今天的日程。
+保持温暖、包容、富有同理心的口吻。
+${contextSummary}
+记住：用户不吃午餐，只吃早晚两顿。
+
+【重要操作指南】：
+1. 如果用户说“我想在2点做某事”或“帮我加个临时任务”，请使用 \`modify_today_plan\`。
+2. 如果用户说“帮我删掉某某任务”，请使用 \`remove_task\`。
+3. 如果用户说“我以后每天都要...”，请使用 \`add_fixed_task\`。
+操作成功后，请简洁地告知用户。
+`;
+
+  const chatHistory = history.map(msg => ({
+    role: msg.role,
+    parts: [{ text: msg.text }]
+  }));
+
   const chat = ai.chats.create({ 
     model: 'gemini-flash-lite-latest', 
+    history: chatHistory,
     config: { 
       systemInstruction,
       tools: [{ functionDeclarations: controlScheduleTools }]
     } 
   });
+
   const response = await chat.sendMessage({ message });
   return { text: response.text, functionCalls: response.functionCalls };
 };

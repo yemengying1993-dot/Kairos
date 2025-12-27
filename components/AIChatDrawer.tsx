@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, X, Sparkles, User, Mic, MicOff } from 'lucide-react';
 import { ChatMessage, EnergyLevel, Task } from '../types';
@@ -13,17 +12,18 @@ interface AIChatDrawerProps {
   onAddWish: (task: Partial<Task>) => void;
   onModifyHours: (hours: { start?: string, end?: string }) => void;
   onModifyToday: (task: Partial<Task>) => void;
+  onRemoveTask: (title: string) => void;
 }
 
 const AIChatDrawer: React.FC<AIChatDrawerProps> = ({ 
-  isOpen, onClose, energy, tasks, onAddFixed, onAddWish, onModifyHours, onModifyToday 
+  isOpen, onClose, energy, tasks, onAddFixed, onAddWish, onModifyHours, onModifyToday, onRemoveTask
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     { 
       role: 'model', 
       text: energy && energy <= 2 
         ? "看你今天精神不太好，别太勉强。我们把计划调轻松点，先从最简单的一件事开始做起吧？" 
-        : "嗨！我是你的计划小助手 Kairos。你可以直接说话告诉我你想添加什么日程，或者修改几点睡觉。", 
+        : "嗨！我是你的计划小助手 Kairos。你可以告诉我你想怎么调整今天的日程，或者帮我删掉哪个任务。", 
       timestamp: Date.now() 
     }
   ]);
@@ -94,6 +94,9 @@ const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           } else if (fc.name === 'modify_today_plan') {
             onModifyToday(args);
             setMessages(prev => [...prev, { role: 'model', text: `⚡️ 明白，已为你临时添加任务：${args.title} @ ${args.startTime}`, timestamp: Date.now() }]);
+          } else if (fc.name === 'remove_task') {
+            onRemoveTask(args.title);
+            setMessages(prev => [...prev, { role: 'model', text: `🗑️ 已为你从日程中移除：${args.title}`, timestamp: Date.now() }]);
           }
         }
       }
