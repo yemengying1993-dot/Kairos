@@ -3,7 +3,7 @@ import {
   Plus, ArrowRight, Clock, Zap, Lock, X, Wind, Trash2, Calendar, 
   ArrowLeft, Timer, Check, CheckCircle2, MessageSquare,
   Play, ChevronLeft, Loader2, BarChart3, Sun, Moon, History as HistoryIcon,
-  BarChart as BarChart3Icon 
+  BarChart as BarChart3Icon, Settings, RefreshCw
 } from 'lucide-react';
 import { AppState, EnergyLevel, Task, DailyRecord } from './types';
 import { getDynamicSchedule, getWeeklyInsight } from './services/geminiService';
@@ -32,6 +32,7 @@ const App: React.FC = () => {
   const [selectedDate] = useState(getLocalDateString(new Date()));
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
+  const [showBaselineSettings, setShowBaselineSettings] = useState(false);
 
   const loadStored = <T,>(key: string, fallback: T): T => {
     try {
@@ -71,6 +72,8 @@ const App: React.FC = () => {
     { id: 'w-4', title: '兴趣探索', duration: 90, energyCost: 'medium', isHardBlock: false, isWish: true },
     { id: 'w-5', title: '看书', duration: 90, energyCost: 'low', isHardBlock: false, isWish: true }
   ]));
+
+  const [lastSyncedBaseline, setLastSyncedBaseline] = useState<string>(() => loadStored('kairos_last_synced_baseline', ''));
 
   const [isAddingOnboardingItem, setIsAddingOnboardingItem] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -113,6 +116,14 @@ const App: React.FC = () => {
     localStorage.setItem('kairos_wishes', JSON.stringify(wishes));
     localStorage.setItem('kairos_active_hours', JSON.stringify(activeHours));
   }, [fixedTasks, wishes, activeHours]);
+
+  const currentBaselineHash = useMemo(() => {
+    return JSON.stringify({ activeHours, fixedTasks, wishes });
+  }, [activeHours, fixedTasks, wishes]);
+
+  const isBaselineDirty = useMemo(() => {
+    return currentBaselineHash !== lastSyncedBaseline;
+  }, [currentBaselineHash, lastSyncedBaseline]);
 
   const activeTask = useMemo(() => {
     if (tasks.length === 0) return null;
@@ -160,6 +171,8 @@ const App: React.FC = () => {
       const scheduled = await getDynamicSchedule(score, [...fixedTasks.filter(t => t.recurringDays?.includes(new Date().getDay())), ...wishes], activeHours);
       if (scheduled && Array.isArray(scheduled)) {
         setTasks(scheduled.map((t: any) => ({ ...t, isCompleted: false, energyCost: t.energyCost || 'medium' })));
+        setLastSyncedBaseline(currentBaselineHash);
+        localStorage.setItem('kairos_last_synced_baseline', JSON.stringify(currentBaselineHash));
         setState('dashboard');
       }
     } catch (e) {
@@ -256,6 +269,7 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="flex gap-2">
+             <button onClick={() => setShowBaselineSettings(true)} className="w-10 h-10 soul-glass rounded-xl flex items-center justify-center text-white/40 border border-white/10 hover:bg-white/5 transition-all"><Settings size={18} /></button>
              <button onClick={calculateWeeklyReport} className="px-4 py-2.5 soul-glass rounded-xl flex items-center gap-2 text-[10px] font-black text-soul-amber border border-soul-amber/20 hover:bg-soul-amber/10 transition-all"><BarChart3 size={16} /><span className="hidden sm:inline">每周总结</span></button>
              <button onClick={() => setState('review')} className="px-4 py-2.5 soul-glass rounded-xl flex items-center gap-2 text-[10px] font-black text-soul-muted hover:text-white transition-all border border-white/10"><CheckCircle2 size={16} /><span className="hidden sm:inline">每日复盘</span></button>
              <button onClick={() => setState('checkin')} className="w-10 h-10 soul-glass rounded-xl flex items-center justify-center text-soul-glow border border-soul-glow/20 hover:bg-soul-glow/10 transition-all"><Zap size={18} /></button>
@@ -267,6 +281,19 @@ const App: React.FC = () => {
       </div>
 
       <div className="max-w-3xl mx-auto mt-6 px-6 sm:px-8 space-y-10">
+        {isBaselineDirty && energy && (
+          <div className="p-5 soul-glass rounded-3xl border-soul-amber/40 bg-soul-amber/5 flex flex-col sm:flex-row justify-between items-center gap-4 animate-in zoom-in-95">
+             <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-soul-amber/20 flex items-center justify-center text-soul-amber"><RefreshCw size={20} className="animate-spin-slow" /></div>
+                <div>
+                   <h4 className="text-white font-bold text-sm">检测到每周基准已修改</h4>
+                   <p className="text-soul-muted/60 text-[10px]">是否将最新修改同步到今日计划？</p>
+                </div>
+             </div>
+             <button onClick={() => handleCheckIn(energy)} className="px-6 py-2.5 bg-soul-amber text-soul-deep rounded-xl font-black text-xs shadow-glow-amber active:scale-95 transition-all">立即同步</button>
+          </div>
+        )}
+
         {activeTask && (
           <div onClick={() => startMonkMode(activeTask.id)} className="group cursor-pointer p-0.5 soul-glass rounded-[2.5rem] border-soul-glow/30 shadow-glow animate-in zoom-in-95 active:scale-95 transition-all">
              <div className="bg-soul-glow/5 p-8 rounded-[2.4rem] flex flex-col sm:flex-row justify-between items-center gap-6 sm:gap-10">
@@ -358,6 +385,92 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {showBaselineSettings && (
+        <div className="fixed inset-0 z-[700] flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-soul-deep/95 backdrop-blur-2xl" onClick={() => setShowBaselineSettings(false)} />
+          <div className="relative w-full max-w-lg soul-glass p-8 rounded-[2.5rem] border-white/10 shadow-glow-lg flex flex-col h-[80vh] animate-in zoom-in-95">
+             <div className="flex justify-between items-center mb-8">
+                <div>
+                   <h3 className="text-2xl font-black text-white italic tracking-tight">每周基准设定</h3>
+                   <p className="text-soul-muted/40 text-[10px] uppercase tracking-widest font-black">调整你的长期生命流</p>
+                </div>
+                <button onClick={() => setShowBaselineSettings(false)} className="p-2 text-white/30 hover:text-white transition-all"><X size={24} /></button>
+             </div>
+             
+             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-10">
+                <section className="space-y-4">
+                   <h4 className="text-[10px] font-black text-soul-glow uppercase tracking-widest px-1">活跃时间窗</h4>
+                   <div className="grid grid-cols-2 gap-4">
+                      <div className="soul-glass p-5 rounded-2xl flex flex-col items-center justify-center relative h-20">
+                         <span className="text-[8px] font-black text-white/20 absolute top-3 left-4 uppercase">苏醒</span>
+                         <input type="time" value={activeHours.start} onChange={(e) => setActiveHours(p => ({ ...p, start: e.target.value }))} className="text-xl font-black text-center w-full" />
+                      </div>
+                      <div className="soul-glass p-5 rounded-2xl flex flex-col items-center justify-center relative h-20">
+                         <span className="text-[8px] font-black text-white/20 absolute top-3 left-4 uppercase">歇息</span>
+                         <input type="time" value={activeHours.end} onChange={(e) => setActiveHours(p => ({ ...p, end: e.target.value }))} className="text-xl font-black text-center w-full" />
+                      </div>
+                   </div>
+                </section>
+
+                <section className="space-y-4">
+                   <div className="flex justify-between items-center px-1">
+                      <h4 className="text-[10px] font-black text-soul-glow uppercase tracking-widest">固定锚点</h4>
+                      <button onClick={() => { setOnboardingStep('fixed'); setIsAddingOnboardingItem(true); }} className="text-white/20 hover:text-soul-glow transition-all"><Plus size={16} /></button>
+                   </div>
+                   <div className="space-y-3">
+                      {fixedTasks.map(task => (
+                        <div key={task.id} className="p-4 soul-glass rounded-2xl border-white/5 flex justify-between items-center">
+                           <div className="space-y-1">
+                              <p className="font-bold text-sm text-white/90">{task.title}</p>
+                              <p className="text-[10px] text-white/30 flex items-center gap-2"><Clock size={10}/> {task.startTime} - {task.endTime}</p>
+                           </div>
+                           <button onClick={() => setFixedTasks(p => p.filter(t => t.id !== task.id))} className="p-2 text-white/10 hover:text-red-400 transition-colors"><Trash2 size={16} /></button>
+                        </div>
+                      ))}
+                   </div>
+                </section>
+
+                <section className="space-y-4">
+                   <div className="flex justify-between items-center px-1">
+                      <h4 className="text-[10px] font-black text-soul-glow uppercase tracking-widest">愿望清单</h4>
+                      <button onClick={() => { setOnboardingStep('wishes'); setIsAddingOnboardingItem(true); }} className="text-white/20 hover:text-soul-glow transition-all"><Plus size={16} /></button>
+                   </div>
+                   <div className="space-y-3">
+                      {wishes.map(task => (
+                        <div key={task.id} className="p-4 soul-glass rounded-2xl border-white/5 flex justify-between items-center">
+                           <div className="space-y-1">
+                              <p className="font-bold text-sm text-white/90">{task.title}</p>
+                              <p className="text-[10px] text-white/30 flex items-center gap-2"><Timer size={10}/> {task.duration}M</p>
+                           </div>
+                           <button onClick={() => setWishes(p => p.filter(t => t.id !== task.id))} className="p-2 text-white/10 hover:text-red-400 transition-colors"><Trash2 size={16} /></button>
+                        </div>
+                      ))}
+                   </div>
+                </section>
+             </div>
+
+             <div className="pt-8 border-t border-white/5 mt-6">
+                <button onClick={() => setShowBaselineSettings(false)} className="w-full py-5 bg-white text-soul-deep rounded-2xl font-black text-lg shadow-glow active:scale-95 transition-all">关闭设定</button>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {isAddingOnboardingItem && (
+        <div className="fixed inset-0 z-[800] flex items-center justify-center p-6">
+           <div className="absolute inset-0 bg-soul-deep/80 backdrop-blur-xl" onClick={() => setIsAddingOnboardingItem(false)} />
+           <div className="relative w-full max-w-sm soul-glass p-8 rounded-[2.5rem] border-white/10 shadow-glow-lg space-y-6 animate-in zoom-in-95">
+              <h3 className="text-xl font-black text-white italic">添加基准项</h3>
+              <input autoFocus value={newItemTitle} onChange={(e) => setNewItemTitle(e.target.value)} placeholder="名称..." className="w-full bg-white/5 rounded-xl px-4 py-3 text-white outline-none border border-white/10 font-bold text-sm" />
+              <div className="grid grid-cols-3 gap-1.5">{(['low', 'medium', 'high'] as const).map(level => (<button key={level} onClick={() => setNewItemEnergy(level)} className={`py-1.5 rounded-lg border text-[8px] font-black transition-all ${newItemEnergy === level ? 'bg-soul-glow text-soul-deep border-soul-glow' : 'text-white/30 border-white/10'}`}>{level === 'low' ? '轻量' : level === 'medium' ? '常规' : '高耗'}</button>))}</div>
+              {onboardingStep === 'fixed' ? (
+                <div className="grid grid-cols-2 gap-3"><div className="soul-glass rounded-xl h-10 flex items-center justify-center border-white/5 overflow-hidden"><input type="time" value={newItemStart} onChange={(e) => setNewItemStart(e.target.value)} className="text-center text-xs h-full w-full bg-transparent" /></div><div className="soul-glass rounded-xl h-10 flex items-center justify-center border-white/5 overflow-hidden"><input type="time" value={newItemEnd} onChange={(e) => setNewItemEnd(e.target.value)} className="text-center text-xs h-full w-full bg-transparent" /></div></div>
+              ) : (<input type="number" value={newItemDuration} onChange={(e) => setNewItemDuration(parseInt(e.target.value)||30)} className="w-full soul-glass rounded-xl p-3 text-sm text-center font-black" placeholder="时长(分)" />)}
+              <div className="flex gap-2"><button onClick={() => {if(!newItemTitle.trim()) return; const isFixed = onboardingStep === 'fixed'; const newTask: Task = { id: Math.random().toString(36).substr(2, 9), title: newItemTitle, duration: isFixed ? (([h1,m1],[h2,m2])=> (Number(h2)*60+Number(m2))-(Number(h1)*60+Number(m1)))(newItemStart.split(':'),newItemEnd.split(':')) : newItemDuration, energyCost: newItemEnergy, isHardBlock: isFixed, isWish: !isFixed, startTime: isFixed ? newItemStart : undefined, endTime: isFixed ? newItemEnd : undefined, recurringDays: isFixed ? [0, 1, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4, 5, 6] }; if (isFixed) setFixedTasks(prev => [...prev, newTask]); else setWishes(prev => [...prev, newTask]); setIsAddingOnboardingItem(false); setNewItemTitle('');}} className="flex-1 py-3 bg-soul-glow text-soul-deep rounded-xl font-black text-sm">确定</button><button onClick={() => setIsAddingOnboardingItem(false)} className="px-4 py-3 text-white/30 font-bold text-sm">取消</button></div>
+           </div>
+        </div>
+      )}
+
       <button onClick={() => setIsChatOpen(true)} className="fixed bottom-6 right-6 w-16 h-16 sm:w-20 sm:h-20 soul-glass text-soul-glow rounded-full shadow-glow-lg flex items-center justify-center z-50 animate-float border border-soul-glow/20 active:scale-90 transition-all"><MessageSquare size={28} /></button>
       <AIChatDrawer isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} energy={energy} tasks={tasks} onAddFixed={(t) => setFixedTasks(prev => [...prev, { ...t, id: Math.random().toString(36).substr(2,9), isHardBlock: true } as Task])} onAddWish={(t) => setWishes(prev => [...prev, { ...t, id: Math.random().toString(36).substr(2,9), isWish: true } as Task])} onModifyHours={(h) => setActiveHours(prev => ({...prev, ...h}))} onModifyToday={(t) => setTasks(prev => [...prev, { ...t, id: Math.random().toString(36).substr(2,9), isCompleted: false } as Task].sort((a,b)=>(a.startTime||'').localeCompare(b.startTime||'')))} />
     </div>
@@ -423,7 +536,7 @@ const App: React.FC = () => {
                 {onboardingStep === 'fixed' ? (
                   <div className="grid grid-cols-2 gap-3"><div className="soul-glass rounded-xl h-10 flex items-center justify-center border-white/5 overflow-hidden"><input type="time" value={newItemStart} onChange={(e) => setNewItemStart(e.target.value)} className="text-center text-xs h-full w-full bg-transparent" /></div><div className="soul-glass rounded-xl h-10 flex items-center justify-center border-white/5 overflow-hidden"><input type="time" value={newItemEnd} onChange={(e) => setNewItemEnd(e.target.value)} className="text-center text-xs h-full w-full bg-transparent" /></div></div>
                 ) : (<input type="number" value={newItemDuration} onChange={(e) => setNewItemDuration(parseInt(e.target.value)||30)} className="w-full soul-glass rounded-xl p-3 text-sm" placeholder="时长(分)" />)}
-                <div className="flex gap-2"><button onClick={() => {if(!newItemTitle.trim()) return; const isFixed = onboardingStep === 'fixed'; const newTask: Task = { id: Math.random().toString(36).substr(2, 9), title: newItemTitle, duration: isFixed ? (([h1,m1],[h2,m2])=> (Number(h2)*60+Number(m2))-(Number(h1)*60+Number(m1)))(newItemStart.split(':'),newItemEnd.split(':')) : newItemDuration, energyCost: newItemEnergy, isHardBlock: isFixed, isWish: !isFixed, startTime: isFixed ? newItemStart : undefined, endTime: isFixed ? newItemEnd : undefined, recurringDays: isFixed ? [...newItemDays] : [0, 1, 2, 3, 4, 5, 6] }; if (isFixed) setFixedTasks(prev => [...prev, newTask]); else setWishes(prev => [...prev, newTask]); setIsAddingOnboardingItem(false); setNewItemTitle('');}} className="flex-1 py-3 bg-soul-glow text-soul-deep rounded-xl font-black text-sm">确定</button><button onClick={() => setIsAddingOnboardingItem(false)} className="px-4 py-3 text-white/30 font-bold text-sm">取消</button></div>
+                <div className="flex gap-2"><button onClick={() => {if(!newItemTitle.trim()) return; const isFixed = onboardingStep === 'fixed'; const newTask: Task = { id: Math.random().toString(36).substr(2, 9), title: newItemTitle, duration: isFixed ? (([h1,m1],[h2,m2])=> (Number(h2)*60+Number(m2))-(Number(h1)*60+Number(m1)))(newItemStart.split(':'),newItemEnd.split(':')) : newItemDuration, energyCost: newItemEnergy, isHardBlock: isFixed, isWish: !isFixed, startTime: isFixed ? newItemStart : undefined, endTime: isFixed ? newItemEnd : undefined, recurringDays: isFixed ? [0, 1, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4, 5, 6] }; if (isFixed) setFixedTasks(prev => [...prev, newTask]); else setWishes(prev => [...prev, newTask]); setIsAddingOnboardingItem(false); setNewItemTitle('');}} className="flex-1 py-3 bg-soul-glow text-soul-deep rounded-xl font-black text-sm">确定</button><button onClick={() => setIsAddingOnboardingItem(false)} className="px-4 py-3 text-white/30 font-bold text-sm">取消</button></div>
               </div>
             )}
           </div>
