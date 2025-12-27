@@ -4,6 +4,7 @@ export type EnergyLevel = 1 | 2 | 3 | 4 | 5;
 export interface Task {
   id: string;
   title: string;
+  description?: string; // For AI recommendations or curiosity seeds
   duration: number; // minutes
   energyCost: 'high' | 'medium' | 'low';
   isHardBlock: boolean;

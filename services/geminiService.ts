@@ -60,25 +60,33 @@ export const getDynamicSchedule = async (
   
   const prompt = `
 # Role (角色) 
-你是个名叫 Kairos 的个人能量调度专家。你专门服务于一位有失眠困扰、疑似 ADHD 倾向、且容易无意识刷手机的用户。
+你是个名叫 Kairos 的个人能量调度专家，擅长为执行功能障碍或 ADHD 倾向的人设计“阻力最小”的日程。
 
 # 任务目标
 生成一份从 ${activeWindow.start} 到 ${activeWindow.end} 的【无缝能量流日程】。
 
 # 输入数据
 - 今日能量评分：${energy}/5 (1=极度疲惫, 5=精力充沛)
-- 原始任务池（包含固定锚点和愿望任务）：
-${JSON.stringify(baseTasks)}
+- 原始任务池：${JSON.stringify(baseTasks)}
 
-# 调度原则
-1. 固定日程优先。
-2. 在空白处填充愿望任务。
-3. 高能耗任务放在高能量时段。
-4. 确保任务间有 5-10 分钟缓冲。
+# 核心调度原则（针对愿望池任务）
+1. **能量与时长对等（强制）**：
+   - **高能量 (4-5)**：愿望池任务（如投资学习、外语学习、看书等）的【当日总时长】必须大于或等于其设定的持续时间（通常为 90 分钟）。
+   - **低能量 (1-2)**：愿望池任务可以显著缩短时长（例如 15-30 分钟），甚至跳过，优先安排休息。
+2. **任务分块 (Task Chunking)**：
+   - 如果一个任务时长较长（如 90 分钟），你可以将其拆分为 2-3 个逻辑块。
+   - 命名方式：保持标题核心一致。例如：“看书 I” (下午 14:00) 和 “看书 II” (晚上 20:00)。
+3. **描述具体化**：对于你生成的留白或拆分块，在 description 中说明为什么要分块进行（例如：“分段专注比长跑更适合你现在的大脑状态”）。
+4. **命名一致性**：核心任务标题必须与输入池一致。
+
+# 约束
+- 严禁医学诊断词汇。
+- 格式：JSON 数组。
+- 时间 HH:mm，严禁重叠。
 `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-3-flash-preview',
     contents: prompt,
     config: {
       responseMimeType: "application/json",
@@ -89,6 +97,7 @@ ${JSON.stringify(baseTasks)}
           properties: {
             id: { type: Type.STRING },
             title: { type: Type.STRING },
+            description: { type: Type.STRING },
             duration: { type: Type.NUMBER },
             energyCost: { type: Type.STRING, enum: ['high', 'medium', 'low'] },
             isHardBlock: { type: Type.BOOLEAN },
@@ -103,29 +112,27 @@ ${JSON.stringify(baseTasks)}
   return JSON.parse(response.text?.trim() || "[]");
 };
 
+export const getWeeklyInsight = async (stats: { completionRate: number, focusMinutes: number, topTasks: string[] }) => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const prompt = `你是个名叫 Kairos 的能量管理专家。为用户本周表现提供温暖总结：完成率 ${stats.completionRate}%, 专注 ${Math.round(stats.focusMinutes/60)}h, 常做 ${stats.topTasks.join(', ')}。严禁医学词汇。`;
+  const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
+  return response.text;
+};
+
 export const chatWithAssistant = async (
   message: string, 
   history: ChatMessage[], 
   context: { energy: EnergyLevel | null; tasks: Task[] }
 ) => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const systemInstruction = `
-你名叫 Kairos，一位温馨的个人能量助手。
-当前时间：${new Date().toLocaleTimeString()}
-今日任务：${JSON.stringify(context.tasks.map(t => ({ title: t.title, time: t.startTime, completed: t.isCompleted })))}
-`;
-  
+  const systemInstruction = `你名叫 Kairos，一位温馨的个人能量助手。不要提及医学诊断词汇。保持温暖、包容。`;
   const chat = ai.chats.create({ 
-    model: 'gemini-3-pro-preview', 
+    model: 'gemini-3-flash-preview', 
     config: { 
       systemInstruction,
       tools: [{ functionDeclarations: controlScheduleTools }]
     } 
   });
-  
   const response = await chat.sendMessage({ message });
-  return {
-    text: response.text,
-    functionCalls: response.functionCalls
-  };
+  return { text: response.text, functionCalls: response.functionCalls };
 };
