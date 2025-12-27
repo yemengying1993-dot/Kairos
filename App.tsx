@@ -441,19 +441,50 @@ const App: React.FC = () => {
     </div>
   );
 
-  const renderReview = () => (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 space-y-10 text-center animate-in fade-in relative overflow-y-auto">
-      <button onClick={() => setState('dashboard')} className="absolute top-10 left-10 px-6 py-3 soul-glass rounded-xl text-white/50 hover:text-white transition-all flex items-center gap-2 font-black border-white/10"><ArrowLeft size={18} /> 返回</button>
-      <div className="soul-glass p-8 sm:p-12 rounded-[2.5rem] border-white/10 max-w-xl w-full space-y-10 shadow-glow-lg my-12">
-          <div className="space-y-3"><div className="inline-block px-4 py-1.5 soul-glass rounded-full text-soul-glow text-[10px] font-black uppercase tracking-widest border border-soul-glow/30 shadow-glow">每日复盘</div><h2 className="text-4xl sm:text-5xl font-black italic tracking-tighter leading-none">晚间结案</h2></div>
-          <div className="space-y-4 text-left max-h-[30vh] overflow-y-auto pr-2 custom-scrollbar">
-             <span className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em] px-2">流转清单</span>
-             {tasks.length > 0 ? tasks.map(t => (<div key={t.id} className="flex items-center justify-between p-4 soul-glass rounded-2xl border-white/5"><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.isCompleted ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-white/20'}`}>{t.isCompleted ? <Check size={16} /> : <X size={16} />}</div><span className={`font-bold text-sm ${t.isCompleted ? 'text-white/80' : 'text-white/30 italic'}`}>{t.title}</span></div><span className="text-[10px] text-white/20 font-mono">{t.startTime}</span></div>)) : <p className="text-center text-white/10 py-4 italic">暂无任务数据</p>}
-          </div>
-          <button onClick={() => setState('dashboard')} className="w-full py-6 bg-soul-glow text-soul-deep rounded-[1.8rem] sm:rounded-[3rem] font-black text-xl sm:text-2xl shadow-glow active:scale-95 transition-all">锁定复盘</button>
+  const renderReview = () => {
+    const dailyCompletedCount = tasks.filter(t => t.isCompleted).length;
+    const dailyTotalCount = tasks.length;
+    const dailyRate = dailyTotalCount > 0 ? Math.round((dailyCompletedCount / dailyTotalCount) * 100) : 0;
+
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 space-y-10 text-center animate-in fade-in relative overflow-y-auto">
+        <button onClick={() => setState('dashboard')} className="absolute top-10 left-10 px-6 py-3 soul-glass rounded-xl text-white/50 hover:text-white transition-all flex items-center gap-2 font-black border-white/10"><ArrowLeft size={18} /> 返回</button>
+        <div className="soul-glass p-8 sm:p-12 rounded-[2.5rem] border-white/10 max-w-xl w-full space-y-10 shadow-glow-lg my-12">
+            <div className="space-y-3">
+              <div className="inline-block px-4 py-1.5 soul-glass rounded-full text-soul-glow text-[10px] font-black uppercase tracking-widest border border-soul-glow/30 shadow-glow">每日复盘</div>
+              <h2 className="text-4xl sm:text-5xl font-black italic tracking-tighter leading-none">晚间结案</h2>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+               <div className="soul-glass p-5 rounded-2xl border-white/5 bg-white/[0.02]">
+                  <p className="text-[8px] font-black text-soul-glow uppercase tracking-widest mb-1">今日完成率</p>
+                  <p className="text-4xl font-black italic tracking-tighter">{dailyRate}%</p>
+               </div>
+               <div className="soul-glass p-5 rounded-2xl border-white/5 bg-white/[0.02]">
+                  <p className="text-[8px] font-black text-soul-muted uppercase tracking-widest mb-1">任务统计</p>
+                  <p className="text-4xl font-black italic tracking-tighter">{dailyCompletedCount}/{dailyTotalCount}</p>
+               </div>
+            </div>
+
+            <div className="space-y-4 text-left max-h-[30vh] overflow-y-auto pr-2 custom-scrollbar">
+               <span className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em] px-2">流转清单</span>
+               {tasks.length > 0 ? tasks.map(t => (
+                 <div key={t.id} className="flex items-center justify-between p-4 soul-glass rounded-2xl border-white/5">
+                   <div className="flex items-center gap-3">
+                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.isCompleted ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-white/20'}`}>
+                       {t.isCompleted ? <Check size={16} /> : <X size={16} />}
+                     </div>
+                     <span className={`font-bold text-sm ${t.isCompleted ? 'text-white/80' : 'text-white/30 italic'}`}>{t.title}</span>
+                   </div>
+                   <span className="text-[10px] text-white/20 font-mono">{t.startTime}</span>
+                 </div>
+               )) : <p className="text-center text-white/10 py-4 italic">暂无任务数据</p>}
+            </div>
+            <button onClick={() => setState('dashboard')} className="w-full py-6 bg-soul-glow text-soul-deep rounded-[1.8rem] sm:rounded-[3rem] font-black text-xl sm:text-2xl shadow-glow active:scale-95 transition-all">锁定复盘</button>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   if (state === 'onboarding') return renderOnboarding();
   if (state === 'dashboard') return renderDashboard();
