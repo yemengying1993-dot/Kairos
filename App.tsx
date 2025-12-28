@@ -4,7 +4,7 @@ import {
   Plus, ArrowRight, Clock, Zap, Lock, X, Wind, Trash2, Calendar, 
   ArrowLeft, Timer, Check, CheckCircle2, MessageSquare,
   Play, ChevronLeft, Loader2, BarChart3, Sun, Moon, History as HistoryIcon,
-  BarChart as BarChart3Icon, Settings, RefreshCw
+  BarChart as BarChart3Icon, Settings, RefreshCw, Star, MapPin
 } from 'lucide-react';
 import { AppState, EnergyLevel, Task, DailyRecord } from './types';
 import { getDynamicSchedule, getWeeklyInsight } from './services/geminiService';
@@ -28,6 +28,33 @@ const getWeekNumber = (date: Date) => {
   return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 };
 
+// 辅助函数：播放专注完成音效
+const playCompletionSound = () => {
+  try {
+    const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime); 
+    osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.6);
+    
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    osc.start();
+    osc.stop(ctx.currentTime + 0.6);
+  } catch (e) {
+    console.warn("Audio playback failed", e);
+  }
+};
+
 const App: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedDate] = useState(getLocalDateString(new Date()));
@@ -49,7 +76,6 @@ const App: React.FC = () => {
     const currentWeek = getWeekNumber(new Date());
     if (lastOnboardingWeek !== currentWeek.toString()) return 'onboarding';
     
-    // 检查今日是否已有记录，若有则直接进入 dashboard
     const today = getLocalDateString(new Date());
     const saved = localStorage.getItem(`kairos_day_${today}`);
     if (saved) {
@@ -186,7 +212,12 @@ const App: React.FC = () => {
     try {
       const scheduled = await getDynamicSchedule(score, [...fixedTasks.filter(t => t.recurringDays?.includes(new Date().getDay())), ...wishes], activeHours);
       if (scheduled && Array.isArray(scheduled)) {
-        setTasks(scheduled.map((t: any) => ({ ...t, isCompleted: false, energyCost: t.energyCost || 'medium' })));
+        setTasks(scheduled.map((t: any) => ({ 
+          ...t, 
+          isCompleted: false, 
+          energyCost: t.energyCost || 'medium',
+          description: t.description || '' // Ensure description is preserved
+        })));
         setLastSyncedBaseline(currentBaselineHash);
         localStorage.setItem('kairos_last_synced_baseline', JSON.stringify(currentBaselineHash));
         setState('dashboard');
@@ -229,6 +260,7 @@ const App: React.FC = () => {
   const completeFocusTask = useCallback(() => {
     setTasks(prev => focusedTaskId ? prev.map(t => t.id === focusedTaskId ? { ...t, isCompleted: true } : t) : prev);
     setShowCompleteConfirm(false);
+    playCompletionSound();
     setState('transition');
   }, [focusedTaskId]);
 
@@ -240,30 +272,68 @@ const App: React.FC = () => {
     setWishes(prev => prev.filter(filterFn));
   }, []);
 
+  const renderTypeBadge = (task: Task) => {
+    if (task.isHardBlock) {
+      return (
+        <span className="flex items-center gap-1 shrink-0 h-5 min-w-[48px] px-1.5 rounded-full border border-soul-glow/20 bg-soul-glow/5 text-soul-glow text-[8px] font-black uppercase tracking-wider">
+          <MapPin size={8} className="fill-soul-glow/20" /> 锚点
+        </span>
+      );
+    }
+    if (task.isWish) {
+      return (
+        <span className="flex items-center gap-1 shrink-0 h-5 min-w-[48px] px-1.5 rounded-full border border-soul-amber/20 bg-soul-amber/5 text-soul-amber text-[8px] font-black uppercase tracking-wider">
+          <Star size={8} className="fill-soul-amber/20" /> 愿望
+        </span>
+      );
+    }
+    return null;
+  };
+
+  const renderEnergyBadge = (cost: 'high' | 'medium' | 'low', isTransparent = false) => {
+    const config = {
+      high: { label: '高耗', color: 'text-red-400 border-red-400/20 bg-red-400/5' },
+      medium: { label: '常规', color: 'text-soul-amber border-soul-amber/20 bg-soul-amber/5' },
+      low: { label: '轻量', color: 'text-emerald-400 border-emerald-400/20 bg-emerald-400/5' }
+    };
+    const { label, color } = config[cost] || config.medium;
+    return (
+      <span className={`flex items-center justify-center shrink-0 h-5 min-w-[38px] px-1.5 rounded-full border text-[8px] font-black uppercase tracking-wider transition-all ${isTransparent ? 'bg-transparent' : color}`}>
+        {label}
+      </span>
+    );
+  };
+
   const renderMonkMode = () => {
     const task = tasks.find(t => t.id === focusedTaskId);
     let initialSeconds = (task?.duration || 25) * 60;
     if (task && task.id === activeTask?.id) initialSeconds = activeTask.remainingSeconds;
+    
     return (
       <div className="min-h-screen bg-soul-deep flex flex-col items-center justify-center p-6 space-y-12 animate-in fade-in duration-1000 relative">
         <div className="text-center space-y-4">
           <div className="flex items-center justify-center gap-3 text-soul-glow animate-pulse"><Lock size={20} /><span className="text-xs font-black uppercase tracking-[0.5em]">深度专注模式</span></div>
           <h2 className="text-4xl sm:text-6xl font-black text-white italic tracking-tighter">{task?.title || '专注当下'}</h2>
         </div>
-        <TaskCountdown key={focusedTaskId} initialSeconds={initialSeconds} onComplete={() => setShowCompleteConfirm(true)} />
+        
+        <TaskCountdown 
+          key={focusedTaskId} 
+          initialSeconds={initialSeconds} 
+          onComplete={completeFocusTask}
+        />
+
         <div className="flex flex-col items-center gap-8">
           <p className="text-soul-muted/40 italic text-base sm:text-lg max-w-md text-center">此时此刻，全世界只有你和这项任务。</p>
           <div className="flex gap-4">
-            <button onClick={() => setShowCompleteConfirm(true)} className="px-8 sm:px-12 py-4 sm:py-6 bg-white text-soul-deep rounded-[2rem] font-black text-lg sm:text-xl shadow-glow active:scale-95 transition-all flex items-center gap-3"><Check size={24} /> 我已完成</button>
+            <button onClick={completeFocusTask} className="px-8 sm:px-12 py-4 sm:py-6 bg-white text-soul-deep rounded-[2rem] font-black text-lg sm:text-xl shadow-glow active:scale-95 transition-all flex items-center gap-3"><Check size={24} /> 我已完成</button>
             <button onClick={() => setState('dashboard')} className="px-6 sm:px-8 py-4 sm:py-6 soul-glass border-white/10 rounded-[2rem] text-white/40 font-bold hover:text-white transition-all text-sm sm:text-base">提前结束</button>
           </div>
         </div>
 
-        {/* 二次确认弹窗 */}
         {showCompleteConfirm && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-300">
             <div className="absolute inset-0 bg-soul-deep/80 backdrop-blur-xl" onClick={() => setShowCompleteConfirm(false)} />
-            <div className="relative w-full max-w-sm soul-glass p-10 rounded-[3rem] border-white/10 shadow-glow-lg text-center space-y-8">
+            <div className="relative w-full max-sm soul-glass p-10 rounded-[3rem] border-white/10 shadow-glow-lg text-center space-y-8">
                <div className="w-20 h-20 rounded-full bg-soul-glow/10 flex items-center justify-center mx-auto text-soul-glow border border-soul-glow/20 mb-2">
                  <Wind size={40} className="animate-float" />
                </div>
@@ -295,7 +365,7 @@ const App: React.FC = () => {
           <div className="flex gap-2">
              <button onClick={() => setShowBaselineSettings(true)} className="w-10 h-10 soul-glass rounded-xl flex items-center justify-center text-white/40 border border-white/10 hover:bg-white/5 transition-all"><Settings size={18} /></button>
              <button onClick={calculateWeeklyReport} className="px-4 py-2.5 soul-glass rounded-xl flex items-center gap-2 text-[10px] font-black text-soul-amber border border-soul-amber/20 hover:bg-soul-amber/10 transition-all"><BarChart3 size={16} /><span className="hidden sm:inline">每周总结</span></button>
-             <button onClick={() => setState('review')} className="px-4 py-2.5 soul-glass rounded-xl flex items-center gap-2 text-[10px] font-black text-soul-muted hover:text-white transition-all border border-white/10"><CheckCircle2 size={16} /><span className="hidden sm:inline">每日复盘</span></button>
+             <button onClick={() => setState('review')} className="px-4 py-2.5 soul-glass rounded-xl flex items-center gap-2 text-[10px] font-black text-soul-muted hover:text-white transition-all border border-white/10"><CheckCircle2 size={16} /><span className="hidden sm:inline">今日复盘</span></button>
              <button onClick={() => setState('checkin')} className="w-10 h-10 soul-glass rounded-xl flex items-center justify-center text-soul-glow border border-soul-glow/20 hover:bg-soul-glow/10 transition-all"><Zap size={18} /></button>
           </div>
         </div>
@@ -321,18 +391,30 @@ const App: React.FC = () => {
         {activeTask && (
           <div onClick={() => startMonkMode(activeTask.id)} className="group cursor-pointer p-0.5 soul-glass rounded-[2.5rem] border-soul-glow/30 shadow-glow animate-in zoom-in-95 active:scale-95 transition-all">
              <div className="bg-soul-glow/5 p-8 rounded-[2.4rem] flex flex-col sm:flex-row justify-between items-center gap-6 sm:gap-10">
-                <div className="text-center sm:text-left space-y-3">
-                   <div className="flex items-center justify-center sm:justify-start gap-3">
-                      <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /><span className="text-[10px] font-black text-soul-glow uppercase tracking-[0.3em]">正在流转中</span>
+                <div className="text-center sm:text-left space-y-3 flex-1">
+                   <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-center sm:justify-start gap-3">
+                        <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /><span className="text-[10px] font-black text-soul-glow uppercase tracking-[0.3em]">正在流转中</span>
+                      </div>
+                      <div className="flex gap-1.5 sm:hidden">
+                        {renderTypeBadge(activeTask)}
+                        {renderEnergyBadge(activeTask.energyCost)}
+                      </div>
                    </div>
-                   <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight italic tracking-tight">{activeTask.title}</h2>
+                   <div className="flex justify-between items-start">
+                     <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight italic tracking-tight">{activeTask.title}</h2>
+                     <div className="hidden sm:flex gap-1.5">
+                        {renderTypeBadge(activeTask)}
+                        {renderEnergyBadge(activeTask.energyCost)}
+                     </div>
+                   </div>
                    {activeTask.description && <p className="text-white/60 text-xs italic line-clamp-2 max-w-sm">{activeTask.description}</p>}
                    <div className="flex items-center justify-center sm:justify-start gap-4">
                       <p className="text-white/40 text-xs font-bold flex items-center gap-1.5 italic"><Clock size={14} /> {activeTask.startTime}</p>
                       <p className="text-white/40 text-xs font-bold flex items-center gap-1.5 italic"><Timer size={14} /> 剩 {activeTask.remainingMinutes} 分钟</p>
                    </div>
                 </div>
-                <div className="flex flex-col items-center gap-2">
+                <div className="flex flex-col items-center gap-2 shrink-0">
                    <div className="w-16 h-16 rounded-full bg-soul-glow flex items-center justify-center text-soul-deep shadow-glow group-hover:scale-110 transition-transform"><Play size={24} fill="currentColor" className="ml-1" /></div>
                 </div>
              </div>
@@ -356,15 +438,18 @@ const App: React.FC = () => {
                       </div>
                     </div>
                     <div onClick={() => !task.isCompleted && (isActive ? startMonkMode(task.id) : handleDashboardTaskEdit(task))} className={`flex-1 p-5 sm:p-7 rounded-[2rem] border transition-all flex flex-col gap-3 text-left cursor-pointer ${task.isCompleted ? 'bg-white/[0.01] border-white/5 opacity-30 scale-[0.98]' : isActive ? 'soul-glass border-soul-glow/40 shadow-glow-lg -translate-y-0.5' : 'soul-glass border-white/5 hover:border-white/20'}`}>
-                       <div className="flex justify-between items-start">
-                          <div className="space-y-1">
+                       <div className="flex justify-between items-start gap-4">
+                          <div className="space-y-1 flex-1">
                              <p className={`text-[8px] sm:text-[10px] font-black uppercase tracking-[0.15em] ${isActive ? 'text-soul-glow' : 'text-white/30'}`}>{task.startTime} · {task.duration}M</p>
                              <h3 className={`text-xl sm:text-2xl font-black tracking-tight leading-tight ${task.isCompleted ? 'line-through text-white/20' : 'text-white/90'}`}>{task.title}</h3>
                              {task.description && !task.isCompleted && (
                                <p className="text-[10px] sm:text-[11px] text-white/50 italic leading-relaxed mt-1 max-w-[90%]">{task.description}</p>
                              )}
                           </div>
-                          <span className={`text-[7px] px-2 py-0.5 rounded-full border font-black uppercase tracking-widest ${task.energyCost === 'high' ? 'text-red-400 border-red-400/20' : task.energyCost === 'medium' ? 'text-soul-amber border-soul-amber/20' : 'text-emerald-400 border-emerald-400/20'}`}>{task.energyCost === 'high' ? '高耗' : task.energyCost === 'medium' ? '常规' : '轻量'}</span>
+                          <div className="flex gap-1.5 items-center">
+                            {renderTypeBadge(task)}
+                            {renderEnergyBadge(task.energyCost, task.isCompleted)}
+                          </div>
                        </div>
                        <div className="flex justify-between items-center pt-1">
                           <div className="flex gap-2 text-[8px] font-black uppercase tracking-widest">
@@ -387,7 +472,7 @@ const App: React.FC = () => {
       {editingTask && (
         <div className="fixed inset-0 z-[600] flex items-center justify-center p-6">
           <div className="absolute inset-0 bg-soul-deep/95 backdrop-blur-2xl" onClick={() => setEditingTask(null)} />
-          <div className="relative w-full max-w-sm soul-glass p-8 rounded-[2.5rem] border-white/10 shadow-glow-lg space-y-8 animate-in zoom-in-95">
+          <div className="relative w-full max-sm soul-glass p-8 rounded-[2.5rem] border-white/10 shadow-glow-lg space-y-8 animate-in zoom-in-95">
              <div className="flex justify-between items-center"><h3 className="text-2xl font-black text-white italic tracking-tight">调整流转瞬间</h3><button onClick={() => setEditingTask(null)} className="p-2 text-white/30 hover:text-white transition-all"><X size={24} /></button></div>
              <div className="space-y-6 max-h-[60vh] overflow-y-auto px-1 custom-scrollbar">
                 <div className="space-y-2"><span className="text-[10px] font-black text-white/20 uppercase tracking-widest px-1">任务名称</span><input autoFocus value={newItemTitle} onChange={(e) => setNewItemTitle(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white font-black text-xl outline-none focus:border-soul-glow" /></div>
@@ -412,7 +497,7 @@ const App: React.FC = () => {
       {showBaselineSettings && (
         <div className="fixed inset-0 z-[700] flex items-center justify-center p-6">
           <div className="absolute inset-0 bg-soul-deep/95 backdrop-blur-2xl" onClick={() => setShowBaselineSettings(false)} />
-          <div className="relative w-full max-w-lg soul-glass p-8 rounded-[2.5rem] border-white/10 shadow-glow-lg flex flex-col h-[80vh] animate-in zoom-in-95">
+          <div className="relative w-full max-lg soul-glass p-8 rounded-[2.5rem] border-white/10 shadow-glow-lg flex flex-col h-[80vh] animate-in zoom-in-95">
              <div className="flex justify-between items-center mb-8">
                 <div>
                    <h3 className="text-2xl font-black text-white italic tracking-tight">每周基准设定</h3>
@@ -483,10 +568,10 @@ const App: React.FC = () => {
       {isAddingOnboardingItem && (
         <div className="fixed inset-0 z-[800] flex items-center justify-center p-6">
            <div className="absolute inset-0 bg-soul-deep/80 backdrop-blur-xl" onClick={() => setIsAddingOnboardingItem(false)} />
-           <div className="relative w-full max-w-sm soul-glass p-8 rounded-[2.5rem] border-white/10 shadow-glow-lg space-y-6 animate-in zoom-in-95">
+           <div className="relative w-full max-sm soul-glass p-8 rounded-[2.5rem] border-white/10 shadow-glow-lg space-y-6 animate-in zoom-in-95">
               <h3 className="text-xl font-black text-white italic">添加基准项</h3>
               <input autoFocus value={newItemTitle} onChange={(e) => setNewItemTitle(e.target.value)} placeholder="名称..." className="w-full bg-white/5 rounded-xl px-4 py-3 text-white outline-none border border-white/10 font-bold text-sm" />
-              <div className="grid grid-cols-3 gap-1.5">{(['low', 'medium', 'high'] as const).map(level => (<button key={level} onClick={() => setNewItemEnergy(level)} className={`py-1.5 rounded-lg border text-[8px] font-black transition-all ${newItemEnergy === level ? 'bg-soul-glow text-soul-deep border-soul-glow' : 'text-white/30 border-white/10'}`}>{level === 'low' ? '轻量' : level === 'medium' ? '常规' : '高耗'}</button>))}</div>
+              <div className="grid grid-cols-3 gap-1.5">{(['low', 'medium', 'high'] as const).map(level => (<button key={level} onClick={() => setNewItemEnergy(level)} className={`py-1.5 rounded-lg border text-[8px] font-black transition-all ${newItemEnergy === level ? 'bg-soul-glow text-soul-deep border-soul-glow shadow-glow' : 'text-white/30 border-white/10'}`}>{level === 'low' ? '轻量' : level === 'medium' ? '常规' : '高耗'}</button>))}</div>
               {onboardingStep === 'fixed' ? (
                 <div className="grid grid-cols-2 gap-3"><div className="soul-glass rounded-xl h-10 flex items-center justify-center border-white/5 overflow-hidden"><input type="time" value={newItemStart} onChange={(e) => setNewItemStart(e.target.value)} className="text-center text-xs h-full w-full bg-transparent" /></div><div className="soul-glass rounded-xl h-10 flex items-center justify-center border-white/5 overflow-hidden"><input type="time" value={newItemEnd} onChange={(e) => setNewItemEnd(e.target.value)} className="text-center text-xs h-full w-full bg-transparent" /></div></div>
               ) : (<input type="number" value={newItemDuration} onChange={(e) => setNewItemDuration(parseInt(e.target.value)||30)} className="w-full soul-glass rounded-xl p-3 text-sm text-center font-black" placeholder="时长(分)" />)}
@@ -511,9 +596,10 @@ const App: React.FC = () => {
             duration: t.duration || 30,
             energyCost: t.energyCost || 'medium',
             isHardBlock: false,
+            isWish: false,
             startTime: t.startTime || '09:00',
             isCompleted: false,
-            description: t.description || '',
+            description: t.description || '今天突然想要做的小确幸。',
           };
           return [...prev, newTask].sort((a,b)=>(a.startTime||'').localeCompare(b.startTime||''));
         })}
@@ -557,7 +643,7 @@ const App: React.FC = () => {
   const renderOnboarding = () => (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 space-y-10 animate-in fade-in duration-700 text-center">
       <div className="space-y-4"><h1 className="text-6xl sm:text-7xl font-black soul-gradient-text tracking-tighter italic leading-none">Kairos</h1><p className="text-soul-muted font-black tracking-[0.4em] text-[10px] uppercase">本周基准校准</p></div>
-      <div className="soul-glass p-8 sm:p-10 rounded-[2.5rem] w-full max-w-lg space-y-8 relative overflow-hidden shadow-2xl border-white/10">
+      <div className="soul-glass p-8 sm:p-10 rounded-[2.5rem] w-full max-lg space-y-8 relative overflow-hidden shadow-2xl border-white/10">
         <div className="flex justify-between items-center px-2">
           <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-3">{onboardingStep === 'hours' ? "起止窗口" : onboardingStep === 'fixed' ? "固定日程" : "愿望池"}</h2>
           <div className="flex gap-1"><div className={`h-1 rounded-full transition-all duration-500 ${onboardingStep === 'hours' ? 'bg-soul-glow w-5' : 'bg-white/10 w-2'}`} /><div className={`h-1 rounded-full transition-all duration-500 ${onboardingStep === 'fixed' ? 'bg-soul-glow w-5' : 'bg-white/10 w-2'}`} /><div className={`h-1 rounded-full transition-all duration-500 ${onboardingStep === 'wishes' ? 'bg-soul-glow w-5' : 'bg-white/10 w-2'}`} /></div>
@@ -578,7 +664,7 @@ const App: React.FC = () => {
             ) : (
               <div className="p-6 soul-glass rounded-[2rem] space-y-5 text-left border-soul-glow/20 animate-in zoom-in-95">
                 <input autoFocus value={newItemTitle} onChange={(e) => setNewItemTitle(e.target.value)} placeholder="名称..." className="w-full bg-white/5 rounded-xl px-4 py-3 text-white outline-none border border-white/10 font-bold text-sm" />
-                <div className="grid grid-cols-3 gap-1.5">{(['low', 'medium', 'high'] as const).map(level => (<button key={level} onClick={() => setNewItemEnergy(level)} className={`py-1.5 rounded-lg border text-[8px] font-black transition-all ${newItemEnergy === level ? 'bg-soul-glow text-soul-deep border-soul-glow' : 'text-white/30 border-white/10'}`}>{level === 'low' ? '低能' : level === 'medium' ? '中能' : '高能'}</button>))}</div>
+                <div className="grid grid-cols-3 gap-1.5">{(['low', 'medium', 'high'] as const).map(level => (<button key={level} onClick={() => setNewItemEnergy(level)} className={`py-1.5 rounded-lg border text-[8px] font-black transition-all ${newItemEnergy === level ? 'bg-soul-glow text-soul-deep border-soul-glow shadow-glow' : 'text-white/30 border-white/10'}`}>{level === 'low' ? '轻量' : level === 'medium' ? '常规' : '高耗'}</button>))}</div>
                 {onboardingStep === 'fixed' ? (
                   <div className="grid grid-cols-2 gap-3"><div className="soul-glass rounded-xl h-10 flex items-center justify-center border-white/5 overflow-hidden"><input type="time" value={newItemStart} onChange={(e) => setNewItemStart(e.target.value)} className="text-center text-xs h-full w-full bg-transparent" /></div><div className="soul-glass rounded-xl h-10 flex items-center justify-center border-white/5 overflow-hidden"><input type="time" value={newItemEnd} onChange={(e) => setNewItemEnd(e.target.value)} className="text-center text-xs h-full w-full bg-transparent" /></div></div>
                 ) : (<input type="number" value={newItemDuration} onChange={(e) => setNewItemDuration(parseInt(e.target.value)||30)} className="w-full soul-glass rounded-xl p-3 text-sm" placeholder="时长(分)" />)}
@@ -610,8 +696,8 @@ const App: React.FC = () => {
         <button onClick={() => setState('dashboard')} className="absolute top-10 left-10 px-6 py-3 soul-glass rounded-xl text-white/50 hover:text-white transition-all flex items-center gap-2 font-black border-white/10"><ArrowLeft size={18} /> 返回</button>
         <div className="soul-glass p-8 sm:p-12 rounded-[2.5rem] border-white/10 max-w-xl w-full space-y-10 shadow-glow-lg my-12">
             <div className="space-y-3">
-              <div className="inline-block px-4 py-1.5 soul-glass rounded-full text-soul-glow text-[10px] font-black uppercase tracking-widest border border-soul-glow/30 shadow-glow">每日复盘</div>
-              <h2 className="text-4xl sm:text-5xl font-black italic tracking-tighter leading-none">晚间结案</h2>
+              <div className="inline-block px-4 py-1.5 soul-glass rounded-full text-soul-glow text-[10px] font-black uppercase tracking-widest border border-soul-glow/30 shadow-glow">今日复盘</div>
+              <h2 className="text-4xl sm:text-5xl font-black italic tracking-tighter leading-none">今日复盘</h2>
             </div>
             
             <div className="grid grid-cols-2 gap-4">

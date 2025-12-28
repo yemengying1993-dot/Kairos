@@ -88,21 +88,26 @@ export const getDynamicSchedule = async (
    - 最后一个任务的【结束时间】（即 \`startTime\` + \`duration\`）**绝对严禁超过** "${activeWindow.end}"。
    - 整个日程表必须精准填满 "${activeWindow.start}" 至 "${activeWindow.end}" 这一时段。
 
-2. **标题绝对忠诚 (Title Integrity)**：
+2. **标题与属性绝对忠诚 (Integrity)**：
    - 对于输入数据“原始任务池”中已有的任务，你 **必须** 使用用户提供的原始标题。
-   - **严禁** 对用户输入的任务标题进行任何改动。
+   - 必须保留原始任务的 \`isHardBlock\` 和 \`isWish\` 属性值。
 
-3. **高能耗任务隔离**：
+3. **强制性温馨描述 (Compulsory Descriptions)**：
+   - **核心要求**：必须为【每一个】生成的任务项提供一段温暖、具体、且充满人性关怀的 \`description\`（描述）。
+   - 如果是用户任务，请根据任务性质提供执行建议（例如：“既然是高能任务，记得深呼吸三次再开始”）。
+   - 如果是 AI 插入的休息项，请描述具体的小动作（例如：“去窗边发呆 2 分钟，感受一下光”、“伸个大大的懒腰”）。
+   - 严禁将描述留空或仅重复标题。
+
+4. **高能耗任务隔离**：
    - **禁止连续安排** 2 个 \`energyCost: "high"\` 的任务。
-   - 每一个 \`high\` 任务结束后，**必须** 强制插入一个 15 分钟的休息缓冲项。
+   - 每一个 \`high\` 任务结束后，**必须** 强制插入一个 15 分钟的低能耗休息缓冲项。
 
-4. **创意休息标题 (仅限 AI 插入项)**：
-   - 只有当你为了填补时间空隙或隔离高能耗任务而【自行插入】新任务时，才起一个温暖、具体的标题。
-   - 严禁叫“能量留白”。示例：“去窗边发呆”、“伸个懒腰”、“整理呼吸”。
-   - 这些项的 \`energyCost\` 为 "low"。
+5. **创意休息标题 (仅限 AI 插入项)**：
+   - 填补空隙时，请起一个温暖、具体的标题。严禁叫“能量留白”或“休息”。示例：“整理一下呼吸”、“喝口温水”、“让大脑离线一会儿”。
+   - 这些项的 \`energyCost\` 为 "low"，\`isHardBlock\` 为 false, \`isWish\` 为 false。
 
-5. **无缝衔接**：
-   - 确保从 "${activeWindow.start}" 到 "${activeWindow.end}" 的每一分钟都有安排，任务间严禁重叠或出现未定义的空白。
+6. **无缝衔接**：
+   - 确保从 "${activeWindow.start}" 到 "${activeWindow.end}" 的每一分钟都有安排，任务间严禁重叠。
 
 # 约束
 - 格式：JSON 数组。
@@ -120,14 +125,15 @@ export const getDynamicSchedule = async (
           type: Type.OBJECT,
           properties: {
             id: { type: Type.STRING },
-            title: { type: Type.STRING, description: "任务标题。若是原始任务池任务，必须原样使用；若是AI插入项，请起具体温馨的标题。" },
-            description: { type: Type.STRING, description: "温暖简短的建议" },
+            title: { type: Type.STRING },
+            description: { type: Type.STRING },
             duration: { type: Type.NUMBER },
             energyCost: { type: Type.STRING, enum: ['high', 'medium', 'low'] },
             isHardBlock: { type: Type.BOOLEAN },
+            isWish: { type: Type.BOOLEAN },
             startTime: { type: Type.STRING }
           },
-          required: ["id", "title", "description", "duration", "energyCost", "isHardBlock", "startTime"]
+          required: ["id", "title", "description", "duration", "energyCost", "isHardBlock", "isWish", "startTime"]
         }
       }
     }
@@ -183,8 +189,8 @@ ${contextSummary}
 
 【重要操作指南】：
 1. 如果用户想要修改、添加或删除日程，**必须优先使用函数工具**。
-2. 删除任务时，请检查上下文中的“今日任务流”，使用最匹配的完整标题调用 \`remove_task\`。
-3. 即使任务在“愿望清单”中，只要用户想删，就调用 \`remove_task\`。
+2. 调用工具时，请务必生成一个温暖、关怀的 \`description\`（描述）。
+3. 删除任务时，请检查上下文中的“今日任务流”，使用最匹配的完整标题调用 \`remove_task\`。
 4. 操作完成后，请简短反馈。
 `;
 
