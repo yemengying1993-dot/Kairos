@@ -85,7 +85,8 @@ const App: React.FC = () => {
   const loadStored = <T,>(key: string, fallback: T): T => {
     try {
       const val = localStorage.getItem(key);
-      return val ? JSON.parse(val) : fallback;
+      if (!val) return fallback;
+      return JSON.parse(val);
     } catch {
       return fallback;
     }
@@ -157,9 +158,13 @@ const App: React.FC = () => {
   useEffect(() => {
     const saved = localStorage.getItem(`kairos_day_${selectedDate}`);
     if (saved) {
-      const parsed: DailyRecord = JSON.parse(saved);
-      setTasks(parsed.tasks);
-      setEnergy(parsed.energy);
+      try {
+        const parsed: DailyRecord = JSON.parse(saved);
+        setTasks(parsed.tasks || []);
+        setEnergy(parsed.energy || null);
+      } catch (e) {
+        console.error("Error loading saved day data");
+      }
     } else {
       setTasks([]);
       setEnergy(null);
@@ -227,14 +232,16 @@ const App: React.FC = () => {
       if (saved) {
         try {
           const record: DailyRecord = JSON.parse(saved);
-          record.tasks.forEach(t => { 
-            totalTasks++; 
-            if (t.isCompleted) { 
-              completedTasks++; 
-              focusMinutes += t.duration; 
-              taskFrequency[t.title] = (taskFrequency[t.title] || 0) + 1; 
-            } 
-          });
+          if (record.tasks) {
+            record.tasks.forEach(t => { 
+              totalTasks++; 
+              if (t.isCompleted) { 
+                completedTasks++; 
+                focusMinutes += t.duration; 
+                taskFrequency[t.title] = (taskFrequency[t.title] || 0) + 1; 
+              } 
+            });
+          }
         } catch (e) {
           console.error("Failed to parse history record", dateKey);
         }
@@ -333,8 +340,8 @@ const App: React.FC = () => {
 
   // 重新设置基准的逻辑
   const performBaselineReset = () => {
-    setState('onboarding');
     setOnboardingStep('hours');
+    setState('onboarding');
     setShowBaselineSettings(false);
     setShowResetConfirm(false);
   };
@@ -546,12 +553,12 @@ const App: React.FC = () => {
                 <div className="space-y-2"><span className="text-[10px] font-black text-white/20 uppercase tracking-widest px-1">描述/建议</span><textarea value={newItemDescription} onChange={(e) => setNewItemDescription(e.target.value)} rows={2} className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-3 text-white/80 font-medium text-sm outline-none focus:border-soul-glow resize-none" /></div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <span className="text-[10px] font-black text-white/20 uppercase tracking-widest px-1">开始</span>
-                    <div className="soul-glass rounded-2xl h-12 flex items-center justify-center border-white/10 overflow-hidden relative max-w-[120px]"><input type="time" value={newItemStart} onChange={(e) => setNewItemStart(e.target.value)} className="text-center font-black text-base w-full h-full bg-transparent px-2" /></div>
+                    <span className="text-[10px] font-black text-white/20 uppercase tracking-widest px-1 text-center block w-full">开始</span>
+                    <div className="soul-glass rounded-2xl h-14 flex items-center justify-center border-white/10 overflow-hidden relative"><input type="time" value={newItemStart} onChange={(e) => setNewItemStart(e.target.value)} className="text-center font-black text-lg w-full h-full bg-transparent px-2" /></div>
                   </div>
                   <div className="space-y-2">
-                    <span className="text-[10px] font-black text-white/20 uppercase tracking-widest px-1">时长(分)</span>
-                    <div className="soul-glass rounded-2xl h-12 flex items-center justify-center border-white/10 overflow-hidden max-w-[120px]"><input type="number" value={newItemDuration} onChange={(e) => setNewItemDuration(parseInt(e.target.value)||30)} className="text-center font-black text-base w-full h-full bg-transparent px-2 outline-none text-white" /></div>
+                    <span className="text-[10px] font-black text-white/20 uppercase tracking-widest px-1 text-center block w-full">时长(分)</span>
+                    <div className="soul-glass rounded-2xl h-14 flex items-center justify-center border-white/10 overflow-hidden"><input type="number" value={newItemDuration} onChange={(e) => setNewItemDuration(parseInt(e.target.value)||30)} className="text-center font-black text-lg w-full h-full bg-transparent px-2 outline-none text-white" /></div>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2">{(['low', 'medium', 'high'] as const).map(level => (<button key={level} onClick={() => setNewItemEnergy(level)} className={`py-3 rounded-xl border text-[10px] font-black transition-all ${newItemEnergy === level ? 'bg-soul-glow text-soul-deep border-soul-glow shadow-glow' : 'text-white/30 border-white/10'}`}>{level === 'low' ? '轻量' : level === 'medium' ? '常规' : '高耗'}</button>))}</div>
@@ -577,13 +584,13 @@ const App: React.FC = () => {
                 <section className="space-y-4">
                    <h4 className="text-[10px] font-black text-soul-glow uppercase tracking-widest px-1">活跃时间窗</h4>
                    <div className="grid grid-cols-2 gap-4">
-                      <div className="soul-glass p-5 rounded-2xl flex flex-col items-center justify-center relative h-20">
+                      <div className="soul-glass p-5 rounded-2xl flex flex-col items-center justify-center relative h-24">
                          <span className="text-[8px] font-black text-white/20 absolute top-3 left-4 uppercase">苏醒</span>
-                         <input type="time" value={activeHours.start} onChange={(e) => setActiveHours(p => ({ ...p, start: e.target.value }))} className="text-xl font-black text-center w-full" />
+                         <input type="time" value={activeHours.start} onChange={(e) => setActiveHours(p => ({ ...p, start: e.target.value }))} className="text-2xl font-black text-center w-full" />
                       </div>
-                      <div className="soul-glass p-5 rounded-2xl flex flex-col items-center justify-center relative h-20">
+                      <div className="soul-glass p-5 rounded-2xl flex flex-col items-center justify-center relative h-24">
                          <span className="text-[8px] font-black text-white/20 absolute top-3 left-4 uppercase">歇息</span>
-                         <input type="time" value={activeHours.end} onChange={(e) => setActiveHours(p => ({ ...p, end: e.target.value }))} className="text-xl font-black text-center w-full" />
+                         <input type="time" value={activeHours.end} onChange={(e) => setActiveHours(p => ({ ...p, end: e.target.value }))} className="text-2xl font-black text-center w-full" />
                       </div>
                    </div>
                 </section>
@@ -669,7 +676,10 @@ const App: React.FC = () => {
               <input autoFocus value={newItemTitle} onChange={(e) => setNewItemTitle(e.target.value)} placeholder="名称..." className="w-full bg-white/5 rounded-xl px-4 py-3 text-white outline-none border border-white/10 font-bold text-sm" />
               <div className="grid grid-cols-3 gap-1.5">{(['low', 'medium', 'high'] as const).map(level => (<button key={level} onClick={() => setNewItemEnergy(level)} className={`py-1.5 rounded-lg border text-[8px] font-black transition-all ${newItemEnergy === level ? 'bg-soul-glow text-soul-deep border-soul-glow shadow-glow' : 'text-white/30 border-white/10'}`}>{level === 'low' ? '轻量' : level === 'medium' ? '常规' : '高耗'}</button>))}</div>
               {onboardingStep === 'fixed' ? (
-                <div className="grid grid-cols-2 gap-3"><div className="soul-glass rounded-xl h-10 flex items-center justify-center border-white/5 overflow-hidden"><input type="time" value={newItemStart} onChange={(e) => setNewItemStart(e.target.value)} className="text-center text-xs h-full w-full bg-transparent" /></div><div className="soul-glass rounded-xl h-10 flex items-center justify-center border-white/5 overflow-hidden"><input type="time" value={newItemEnd} onChange={(e) => setNewItemEnd(e.target.value)} className="text-center text-xs h-full w-full bg-transparent" /></div></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="soul-glass rounded-xl h-12 flex items-center justify-center border-white/5 overflow-hidden relative"><input type="time" value={newItemStart} onChange={(e) => setNewItemStart(e.target.value)} className="text-center text-sm h-full w-full bg-transparent" /></div>
+                  <div className="soul-glass rounded-xl h-12 flex items-center justify-center border-white/5 overflow-hidden relative"><input type="time" value={newItemEnd} onChange={(e) => setNewItemEnd(e.target.value)} className="text-center text-sm h-full w-full bg-transparent" /></div>
+                </div>
               ) : (<input type="number" value={newItemDuration} onChange={(e) => setNewItemDuration(parseInt(e.target.value)||30)} className="w-full soul-glass rounded-xl p-3 text-sm text-center font-black" placeholder="时长(分)" />)}
               <div className="flex gap-2"><button onClick={() => {if(!newItemTitle.trim()) return; const isFixed = onboardingStep === 'fixed'; const newTask: Task = { id: Math.random().toString(36).substr(2, 9), title: newItemTitle, duration: isFixed ? (([h1,m1],[h2,m2])=> (Number(h2)*60+Number(m2))-(Number(h1)*60+Number(m1)))(newItemStart.split(':'),newItemEnd.split(':')) : newItemDuration, energyCost: newItemEnergy, isHardBlock: isFixed, isWish: !isFixed, startTime: isFixed ? newItemStart : undefined, endTime: isFixed ? newItemEnd : undefined, recurringDays: isFixed ? [0, 1, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4, 5, 6] }; if (isFixed) setFixedTasks(prev => [...prev, newTask]); else setWishes(prev => [...prev, newTask]); setIsAddingOnboardingItem(false); setNewItemTitle('');}} className="flex-1 py-3 bg-soul-glow text-soul-deep rounded-xl font-black text-sm">确定</button><button onClick={() => setIsAddingOnboardingItem(false)} className="px-4 py-3 text-white/30 font-bold text-sm">取消</button></div>
            </div>
@@ -746,8 +756,14 @@ const App: React.FC = () => {
         </div>
         {onboardingStep === 'hours' && (
           <div className="grid grid-cols-2 gap-4">
-            <label className="soul-glass p-5 rounded-[1.5rem] h-20 flex flex-col items-center justify-center cursor-pointer"><span className="text-[8px] font-black uppercase text-soul-glow/50 flex items-center justify-center gap-1.5"><Sun size={10}/> 苏醒</span><input type="time" value={activeHours.start} onChange={(e) => setActiveHours(p => ({ ...p, start: e.target.value }))} className="text-xl text-center w-full font-black bg-transparent" /></label>
-            <label className="soul-glass p-5 rounded-[1.5rem] h-20 flex flex-col items-center justify-center cursor-pointer"><span className="text-[8px] font-black uppercase text-soul-muted/50 flex items-center justify-center gap-1.5"><Moon size={10}/> 歇息</span><input type="time" value={activeHours.end} onChange={(e) => setActiveHours(p => ({ ...p, end: e.target.value }))} className="text-xl text-center w-full font-black bg-transparent" /></label>
+            <label className="soul-glass p-5 rounded-[1.5rem] h-24 flex flex-col items-center justify-center cursor-pointer relative">
+              <span className="text-[8px] font-black uppercase text-soul-glow/50 flex items-center justify-center gap-1.5 absolute top-3"><Sun size={10}/> 苏醒</span>
+              <input type="time" value={activeHours.start} onChange={(e) => setActiveHours(p => ({ ...p, start: e.target.value }))} className="text-2xl text-center w-full font-black bg-transparent mt-2" />
+            </label>
+            <label className="soul-glass p-5 rounded-[1.5rem] h-24 flex flex-col items-center justify-center cursor-pointer relative">
+              <span className="text-[8px] font-black uppercase text-soul-muted/50 flex items-center justify-center gap-1.5 absolute top-3"><Moon size={10}/> 歇息</span>
+              <input type="time" value={activeHours.end} onChange={(e) => setActiveHours(p => ({ ...p, end: e.target.value }))} className="text-2xl text-center w-full font-black bg-transparent mt-2" />
+            </label>
           </div>
         )}
         {onboardingStep !== 'hours' && (
@@ -762,8 +778,11 @@ const App: React.FC = () => {
                 <input autoFocus value={newItemTitle} onChange={(e) => setNewItemTitle(e.target.value)} placeholder="名称..." className="w-full bg-white/5 rounded-xl px-4 py-3 text-white outline-none border border-white/10 font-bold text-sm" />
                 <div className="grid grid-cols-3 gap-1.5">{(['low', 'medium', 'high'] as const).map(level => (<button key={level} onClick={() => setNewItemEnergy(level)} className={`py-1.5 rounded-lg border text-[8px] font-black transition-all ${newItemEnergy === level ? 'bg-soul-glow text-soul-deep border-soul-glow shadow-glow' : 'text-white/30 border-white/10'}`}>{level === 'low' ? '轻量' : level === 'medium' ? '常规' : '高耗'}</button>))}</div>
                 {onboardingStep === 'fixed' ? (
-                  <div className="grid grid-cols-2 gap-3"><div className="soul-glass rounded-xl h-10 flex items-center justify-center border-white/5 overflow-hidden"><input type="time" value={newItemStart} onChange={(e) => setNewItemStart(e.target.value)} className="text-center text-xs h-full w-full bg-transparent" /></div><div className="soul-glass rounded-xl h-10 flex items-center justify-center border-white/5 overflow-hidden"><input type="time" value={newItemEnd} onChange={(e) => setNewItemEnd(e.target.value)} className="text-center text-xs h-full w-full bg-transparent" /></div></div>
-                ) : (<input type="number" value={newItemDuration} onChange={(e) => setNewItemDuration(parseInt(e.target.value)||30)} className="w-full soul-glass rounded-xl p-3 text-sm" placeholder="时长(分)" />)}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="soul-glass rounded-xl h-12 flex items-center justify-center border-white/5 overflow-hidden relative"><input type="time" value={newItemStart} onChange={(e) => setNewItemStart(e.target.value)} className="text-center text-xs h-full w-full bg-transparent" /></div>
+                    <div className="soul-glass rounded-xl h-12 flex items-center justify-center border-white/5 overflow-hidden relative"><input type="time" value={newItemEnd} onChange={(e) => setNewItemEnd(e.target.value)} className="text-center text-xs h-full w-full bg-transparent" /></div>
+                  </div>
+                ) : (<input type="number" value={newItemDuration} onChange={(e) => setNewItemDuration(parseInt(e.target.value)||30)} className="w-full soul-glass rounded-xl p-3 text-sm text-center font-bold" placeholder="时长(分)" />)}
                 <div className="flex gap-2"><button onClick={() => {if(!newItemTitle.trim()) return; const isFixed = onboardingStep === 'fixed'; const newTask: Task = { id: Math.random().toString(36).substr(2, 9), title: newItemTitle, duration: isFixed ? (([h1,m1],[h2,m2])=> (Number(h2)*60+Number(m2))-(Number(h1)*60+Number(m1)))(newItemStart.split(':'),newItemEnd.split(':')) : newItemDuration, energyCost: newItemEnergy, isHardBlock: isFixed, isWish: !isFixed, startTime: isFixed ? newItemStart : undefined, endTime: isFixed ? newItemEnd : undefined, recurringDays: isFixed ? [0, 1, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4, 5, 6] }; if (isFixed) setFixedTasks(prev => [...prev, newTask]); else setWishes(prev => [...prev, newTask]); setIsAddingOnboardingItem(false); setNewItemTitle('');}} className="flex-1 py-3 bg-soul-glow text-soul-deep rounded-xl font-black text-sm">确定</button><button onClick={() => setIsAddingOnboardingItem(false)} className="px-4 py-3 text-white/30 font-bold text-sm">取消</button></div>
               </div>
             )}
