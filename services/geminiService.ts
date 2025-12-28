@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { Task, EnergyLevel, ChatMessage } from "../types";
 
@@ -51,11 +52,11 @@ const controlScheduleTools: FunctionDeclaration[] = [
   },
   {
     name: "remove_task",
-    description: "删除一个任务。可以删除今日计划中的任务、固定日程或愿望池中的任务。",
+    description: "删除一个任务。请务必使用任务流中出现的准确标题。",
     parameters: {
       type: Type.OBJECT,
       properties: {
-        title: { type: Type.STRING, description: "要删除的任务标题（支持模糊匹配）" }
+        title: { type: Type.STRING, description: "要删除的任务标题。请参考‘今日任务流’中的名称。" }
       },
       required: ["title"]
     }
@@ -77,34 +78,34 @@ export const getDynamicSchedule = async (
 生成一份从 ${activeWindow.start} 到 ${activeWindow.end} 的【无缝能量流日程】。
 
 # 输入数据
-- 今日能量评分：${energy}/5 (1=极其疲惫, 5=精力充沛)
-- 原始任务池：${JSON.stringify(baseTasks)}
+- 今日能量评分：${energy}/5
+- 原始任务池（包含固定日程和愿望清单）：${JSON.stringify(baseTasks)}
 
-# 核心调度原则 (核心逻辑)
+# 核心调度原则 (必须严格遵守)
 
-1. **固定任务（锚点）绝对锁定**：
-   - 对于 \`isHardBlock: true\` 的任务，**必须**保留原始的 startTime。严禁移动时间。
-   - 标题必须与输入保持 100% 一致。
+1. **标题绝对忠诚 (Title Integrity)**：
+   - 对于输入数据“原始任务池”中已有的任务，你 **必须** 使用用户提供的原始标题。
+   - **严禁** 对用户输入的任务标题进行任何改动、扩充或美化。
 
-2. **精简且温暖的描述 (Concise Description)**：
-   - **每一项任务**都必须提供 \`description\`。
-   - 描述要**简洁、精炼**，用一两句话提供温暖的行动建议或鼓励。
-   - **严禁**使用“调度意图”、“行动提示”等生硬的分段标签，直接书写内容。
+2. **第一个任务准时对齐**：
+   - 生成的日程第一个任务的 \`startTime\` **必须严格等于** "${activeWindow.start}"。
+   - 如果用户最晚的固定任务开始时间晚于起始时间，请在最前面插入一个休息/准备项。
 
-3. **标题严格一致性**：
-   - 原始任务池任务的标题（title）**严禁**修改、扩充或添加后缀。
+3. **高能耗任务隔离**：
+   - **禁止连续安排** 2 个 \`energyCost: "high"\` 的任务。
+   - 每一个 \`high\` 任务结束后，**必须** 强制插入一个 15 分钟的休息缓冲项。
 
-4. **禁止虚构任务**：
-   - 严禁添加输入中不存在的任务（如午餐等）。唯一允许添加的是“能量留白”。
+4. **创意休息标题 (仅限 AI 插入项)**：
+   - 只有当你为了填补时间空隙或隔离高能耗任务而【自行插入】新任务时，才需要起一个温暖、具体的标题。
+   - 严禁叫“能量留白”。示例：“去窗边发呆”、“伸个懒腰”、“喝杯温水”、“整理呼吸”。
+   - 这些项的 \`energyCost\` 为 "low"，\`isHardBlock\` 为 false。
 
-5. **能量调度**：
-   - 禁止安排连续超过 2 个 'high' 任务。
-   - 必要时强制插入 15 分钟的“能量留白”。
+5. **无缝衔接**：
+   - 确保从 "${activeWindow.start}" 到 "${activeWindow.end}" 的每一分钟都有安排，任务间严禁重叠或出现未定义的空白。
 
 # 约束
 - 格式：JSON 数组。
-- 时间 HH:mm 格式，严禁任务重叠。
-- 确保涵盖所有 \`isHardBlock: true\` 的固定任务。
+- 时间 HH:mm 格式。
 `;
 
   const stream = await ai.models.generateContentStream({
@@ -118,8 +119,8 @@ export const getDynamicSchedule = async (
           type: Type.OBJECT,
           properties: {
             id: { type: Type.STRING },
-            title: { type: Type.STRING },
-            description: { type: Type.STRING, description: "精简温暖的任务建议，无需标签" },
+            title: { type: Type.STRING, description: "任务标题。若是原始任务池任务，必须原样使用；若是AI插入项，请起具体温馨的标题。" },
+            description: { type: Type.STRING, description: "温暖简短的建议" },
             duration: { type: Type.NUMBER },
             energyCost: { type: Type.STRING, enum: ['high', 'medium', 'low'] },
             isHardBlock: { type: Type.BOOLEAN },
@@ -180,10 +181,10 @@ ${contextSummary}
 记住：用户不吃午餐，只吃早晚两顿。
 
 【重要操作指南】：
-1. 如果用户说“我想在2点做某事”或“帮我加个临时任务”，请使用 \`modify_today_plan\`。
-2. 如果用户说“帮我删掉某某任务”，请使用 \`remove_task\`。
-3. 如果用户说“我以后每天都要...”，请使用 \`add_fixed_task\`。
-操作成功后，请简洁地告知用户。
+1. 如果用户想要修改、添加或删除日程，**必须优先使用函数工具**。
+2. 删除任务时，请检查上下文中的“今日任务流”，使用最匹配的完整标题调用 \`remove_task\`。
+3. 即使任务在“愿望清单”中，只要用户想删，就调用 \`remove_task\`。
+4. 操作完成后，请简短反馈。
 `;
 
   const chatHistory = history.map(msg => ({

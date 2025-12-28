@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Plus, ArrowRight, Clock, Zap, Lock, X, Wind, Trash2, Calendar, 
@@ -47,6 +48,21 @@ const App: React.FC = () => {
     const lastOnboardingWeek = localStorage.getItem('kairos_week_done');
     const currentWeek = getWeekNumber(new Date());
     if (lastOnboardingWeek !== currentWeek.toString()) return 'onboarding';
+    
+    // 检查今日是否已有记录，若有则直接进入 dashboard
+    const today = getLocalDateString(new Date());
+    const saved = localStorage.getItem(`kairos_day_${today}`);
+    if (saved) {
+      try {
+        const parsed: DailyRecord = JSON.parse(saved);
+        if (parsed.energy && parsed.tasks && parsed.tasks.length > 0) {
+          return 'dashboard';
+        }
+      } catch (e) {
+        console.error("Failed to parse today's record during init");
+      }
+    }
+    
     return 'checkin';
   });
 
@@ -100,7 +116,7 @@ const App: React.FC = () => {
   }, [selectedDate]);
 
   useEffect(() => {
-    if (tasks.length > 0 && energy) {
+    if (energy !== null) {
       const record: DailyRecord = { date: selectedDate, energy, tasks };
       localStorage.setItem(`kairos_day_${selectedDate}`, JSON.stringify(record));
     }
@@ -215,6 +231,14 @@ const App: React.FC = () => {
     setShowCompleteConfirm(false);
     setState('transition');
   }, [focusedTaskId]);
+
+  const handleRemoveTask = useCallback((title: string) => {
+    const cleanTitle = title.trim().toLowerCase();
+    const filterFn = (t: Task) => !t.title.toLowerCase().includes(cleanTitle);
+    setTasks(prev => prev.filter(filterFn));
+    setFixedTasks(prev => prev.filter(filterFn));
+    setWishes(prev => prev.filter(filterFn));
+  }, []);
 
   const renderMonkMode = () => {
     const task = tasks.find(t => t.id === focusedTaskId);
@@ -493,11 +517,7 @@ const App: React.FC = () => {
           };
           return [...prev, newTask].sort((a,b)=>(a.startTime||'').localeCompare(b.startTime||''));
         })}
-        onRemoveTask={(title) => {
-          setTasks(prev => prev.filter(t => !t.title.includes(title)));
-          setFixedTasks(prev => prev.filter(t => !t.title.includes(title)));
-          setWishes(prev => prev.filter(t => !t.title.includes(title)));
-        }}
+        onRemoveTask={handleRemoveTask}
       />
     </div>
   );
