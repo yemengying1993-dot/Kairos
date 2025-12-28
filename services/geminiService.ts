@@ -2,6 +2,9 @@
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { Task, EnergyLevel, ChatMessage } from "../types";
 
+// The Google GenAI SDK MUST be initialized using process.env.API_KEY as per guidelines.
+// This key is assumed to be pre-configured and valid in the execution environment.
+
 const controlScheduleTools: FunctionDeclaration[] = [
   {
     name: "add_fixed_task",
@@ -68,7 +71,8 @@ export const getDynamicSchedule = async (
   baseTasks: Task[], 
   activeWindow: { start: string; end: string }
 ) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // Always use process.env.API_KEY directly to initialize.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
   
   const prompt = `
 # Role (角色) 
@@ -78,26 +82,9 @@ export const getDynamicSchedule = async (
 利用提供的原始任务池，生成一份从 ${activeWindow.start} 到 ${activeWindow.end} 的【无缝执行清单】。
 
 # 核心约束 (最高优先级)
-
-1. **锚点任务绝对固定 (Fixed Anchor Lock)**：
-   - 凡是 \`isHardBlock: true\` 且带有 \`startTime\` 的任务，你 **绝对禁止** 修改其开始时间。
-   - 如果窗口起始时间早于第一个锚点任务，你必须插入 AI 填充项。
-
-2. **标题镜像原则 (Title Integrity)**：
-   - 对于输入数据 \`baseTasks\` 中用户提供的任务标题，你必须 **原文照搬**，严禁进行任何修改。
-
-3. **AI 填充项语言风格与描述 (Filler Tasks)**：
-   - **标题要求**：可读性高、专业且体面。
-   - **禁止抽象词**：如“冥思空境”、“执行缓冲”、“认知重置”。
-   - **禁止土味词**：如“发个呆”、“喝口水”、“伸懒腰”。
-   - **推荐词汇**：正念冥想、肢体拉伸、深呼吸放松、水分补给、远眺放松、静坐休整。
-   - **描述要求**：必须在 \`description\` 字段中提供该任务相关的具体建议。
-     - 例如：肢体拉伸 —— 建议重点转动肩颈，缓解久坐后的肌肉僵硬。
-     - 例如：水分补给 —— 推荐饮用 300ml 温水，维持身体代谢与警觉度。
-
-# 排除逻辑
-- 严禁生成家务、打扫、做饭等琐事。
-- 饮食尊重：用户一日两餐。
+1. **锚点任务绝对固定 (Fixed Anchor Lock)**：凡是 \`isHardBlock: true\` 且带有 \`startTime\` 的任务，你禁止修改其开始时间。
+2. **标题镜像原则 (Title Integrity)**：用户提供的任务标题，你必须原文照搬，严禁修改。
+3. **AI 填充项语言风格与描述 (Filler Tasks)**：使用专业、体面的标题（如：正念冥想、肢体拉伸、水分补给、深呼吸放松），并在 \`description\` 字段中提供该任务相关的具体建议。
 
 # 输入上下文
 - 能量评分：${energy}/5
@@ -107,59 +94,54 @@ export const getDynamicSchedule = async (
 - 格式：JSON 数组。
 `;
 
-  const stream = await ai.models.generateContentStream({
-    model: 'gemini-flash-lite-latest',
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            id: { type: Type.STRING },
-            title: { type: Type.STRING },
-            description: { type: Type.STRING },
-            duration: { type: Type.NUMBER },
-            energyCost: { type: Type.STRING, enum: ['high', 'medium', 'low'] },
-            isHardBlock: { type: Type.BOOLEAN },
-            isWish: { type: Type.BOOLEAN },
-            startTime: { type: Type.STRING }
-          },
-          required: ["id", "title", "description", "duration", "energyCost", "isHardBlock", "isWish", "startTime"]
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              title: { type: Type.STRING },
+              description: { type: Type.STRING },
+              duration: { type: Type.NUMBER },
+              energyCost: { type: Type.STRING, enum: ['high', 'medium', 'low'] },
+              isHardBlock: { type: Type.BOOLEAN },
+              isWish: { type: Type.BOOLEAN },
+              startTime: { type: Type.STRING }
+            },
+            required: ["id", "title", "description", "duration", "energyCost", "isHardBlock", "isWish", "startTime"]
+          }
         }
       }
-    }
-  });
+    });
 
-  let fullText = "";
-  for await (const chunk of stream) {
-    fullText += chunk.text || "";
-  }
-
-  try {
-    return JSON.parse(fullText.trim() || "[]");
+    const fullText = response.text;
+    return JSON.parse(fullText || "[]");
   } catch (e) {
-    console.error("Schedule Parse Error:", fullText);
+    console.error("Schedule Generation Error:", e);
     return [];
   }
 };
 
 export const getWeeklyInsight = async (stats: { completionRate: number, focusMinutes: number, topTasks: string[] }) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
   const prompt = `你是个名叫 Kairos 的能量管理专家。为 ADHD 用户提供温馨总结：完成率 ${stats.completionRate}%, 专注 ${Math.round(stats.focusMinutes/60)}h, 常做 ${stats.topTasks.join(', ')}。多鼓励，禁医学词。`;
   
-  const stream = await ai.models.generateContentStream({ 
-    model: 'gemini-flash-lite-latest', 
-    contents: prompt 
-  });
-
-  let fullText = "";
-  for await (const chunk of stream) {
-    fullText += chunk.text || "";
+  try {
+    const response = await ai.models.generateContent({ 
+      model: 'gemini-3-flash-preview', 
+      contents: prompt 
+    });
+    return response.text || "回顾本周，每一个专注的瞬间都值得被铭记。继续保持你的节奏。";
+  } catch (e) {
+    console.error("Insight Error:", e);
+    return "回顾本周，每一个专注的瞬间都值得被铭记。继续保持你的节奏。";
   }
-  
-  return fullText;
 };
 
 export const chatWithAssistant = async (
@@ -167,7 +149,7 @@ export const chatWithAssistant = async (
   history: ChatMessage[], 
   context: { energy: EnergyLevel | null; tasks: Task[] }
 ) => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
   
   const contextSummary = `
 用户当前能量: ${context.energy || '未同步'}/5
@@ -188,15 +170,20 @@ ${contextSummary}
     parts: [{ text: msg.text }]
   }));
 
-  const chat = ai.chats.create({ 
-    model: 'gemini-flash-lite-latest', 
-    history: chatHistory,
-    config: { 
-      systemInstruction,
-      tools: [{ functionDeclarations: controlScheduleTools }]
-    } 
-  });
+  try {
+    const chat = ai.chats.create({ 
+      model: 'gemini-3-flash-preview', 
+      history: chatHistory,
+      config: { 
+        systemInstruction,
+        tools: [{ functionDeclarations: controlScheduleTools }]
+      } 
+    });
 
-  const response = await chat.sendMessage({ message });
-  return { text: response.text, functionCalls: response.functionCalls };
+    const response = await chat.sendMessage({ message });
+    return { text: response.text, functionCalls: response.functionCalls };
+  } catch (e) {
+    console.error("Chat Error:", e);
+    return { text: "抱歉，我的思绪暂时有些断连。请确认您的 API Key 是否配置正确。", functionCalls: [] };
+  }
 };
