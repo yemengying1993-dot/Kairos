@@ -399,7 +399,7 @@ const App: React.FC = () => {
         <div className="flex flex-col items-center gap-8">
           <p className="text-soul-muted/40 italic text-base sm:text-lg max-w-md text-center">此时此刻，全世界只有你和这项任务。</p>
           <div className="flex gap-4">
-            <button onClick={completeFocusTask} className="px-8 sm:px-12 py-4 sm:py-6 bg-white text-soul-deep rounded-[2rem] font-black text-lg sm:text-xl shadow-glow active:scale-95 transition-all flex items-center gap-3"><Check size={24} /> 我已完成</button>
+            <button onClick={() => setShowCompleteConfirm(true)} className="px-8 sm:px-12 py-4 sm:py-6 bg-white text-soul-deep rounded-[2rem] font-black text-lg sm:text-xl shadow-glow active:scale-95 transition-all flex items-center gap-3"><Check size={24} /> 我已完成</button>
             <button onClick={() => setState('dashboard')} className="px-6 sm:px-8 py-4 sm:py-6 soul-glass border-white/10 rounded-[2rem] text-white/40 font-bold hover:text-white transition-all text-sm sm:text-base">提前结束</button>
           </div>
         </div>

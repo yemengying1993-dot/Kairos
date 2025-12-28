@@ -71,7 +71,6 @@ export const getDynamicSchedule = async (
   baseTasks: Task[], 
   activeWindow: { start: string; end: string }
 ) => {
-  // Always use process.env.API_KEY directly to initialize.
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
   
   const prompt = `
@@ -84,7 +83,18 @@ export const getDynamicSchedule = async (
 # 核心约束 (最高优先级)
 1. **锚点任务绝对固定 (Fixed Anchor Lock)**：凡是 \`isHardBlock: true\` 且带有 \`startTime\` 的任务，你禁止修改其开始时间。
 2. **标题镜像原则 (Title Integrity)**：用户提供的任务标题，你必须原文照搬，严禁修改。
-3. **AI 填充项语言风格与描述 (Filler Tasks)**：使用专业、体面的标题（如：正念冥想、肢体拉伸、水分补给、深呼吸放松），并在 \`description\` 字段中提供该任务相关的具体建议。
+3. **时长上限与精准拆分 (Duration Cap & Precise Splitting)**：
+   - 任何生成的任务单次时长【绝对不得超过 60 分钟】。
+   - **90分钟任务专项准则**：如果一个任务（如愿望池任务）原始时长为 90 分钟，你必须将其拆分为【两段 45 分钟】的任务，中间插入休息。
+   - **一般拆分策略**：
+     - 能量 1-3（低/中）：长任务尽量拆为 30-45 分钟的短块。
+     - 能量 4-5（高）：长任务可拆为 60 分钟的块，但总和需覆盖原始时长。
+   - 拆分后的任务片段应保持相同标题，并用 (1/2), (2/2) 标记。
+4. **能量节奏与间隙 (Energy Pacing & Recovery)**：
+   - **严禁连续安排高能耗任务**：不允许两个 \`energyCost: 'high'\` 的任务紧挨着。
+   - **强制休息插入**：在每个高能耗任务之后，或在两个任务片段（如 45+45 的中间）之间，必须插入 10-20 分钟的“填充项/休息项”。
+   - **填充项示例**：深呼吸放松、水分补给、肢体拉伸、远眺窗外。标记为 \`energyCost: 'low'\`。
+5. **AI 填充项描述 (Filler Tasks)**：在 \`description\` 字段中提供具体且温馨的建议。
 
 # 输入上下文
 - 能量评分：${energy}/5
@@ -140,7 +150,7 @@ export const getWeeklyInsight = async (stats: { completionRate: number, focusMin
     return response.text || "回顾本周，每一个专注的瞬间都值得被铭记。继续保持你的节奏。";
   } catch (e) {
     console.error("Insight Error:", e);
-    return "回顾本周，每一个专注的瞬间都值得被铭记。继续保持你的节奏。";
+    return "回顾本周，每一个专注的瞬间都值得被记。继续保持你的节奏。";
   }
 };
 
@@ -159,9 +169,11 @@ export const chatWithAssistant = async (
   const systemInstruction = `你名叫 Kairos，一位体面且高效的生活助手。
 注意：
 1. 绝对不要改动用户自己输入的任务标题。
-2. 你自己生成的填充任务应清晰、体面（如“肢体拉伸”、“正念冥想”），并给出具体的执行建议。
-3. 绝对尊重固定任务的时间点。
-4. 所有的修改必须通过工具执行。
+2. 建议用户将 90 分钟的长任务拆分为两个 45 分钟的专注段。
+3. 严禁连续安排高能耗任务。
+4. 任何生成的任务单项时长不要超过 60 分钟。
+5. 你自己生成的填充任务应清晰、体面（如“肢体拉伸”、“正念冥想”），并给出具体的执行建议。
+6. 所有的修改必须通过工具执行。
 ${contextSummary}
 `;
 
