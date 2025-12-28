@@ -4,7 +4,7 @@ import {
   Plus, ArrowRight, Clock, Zap, Lock, X, Wind, Trash2, Calendar, 
   ArrowLeft, Timer, Check, CheckCircle2, MessageSquare,
   Play, ChevronLeft, Loader2, BarChart3, Sun, Moon, History as HistoryIcon,
-  BarChart as BarChart3Icon, Settings, RefreshCw, Star, MapPin
+  BarChart as BarChart3Icon, Settings, RefreshCw, Star, MapPin, AlertTriangle
 } from 'lucide-react';
 import { AppState, EnergyLevel, Task, DailyRecord } from './types';
 import { getDynamicSchedule, getWeeklyInsight } from './services/geminiService';
@@ -80,6 +80,7 @@ const App: React.FC = () => {
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [showBaselineSettings, setShowBaselineSettings] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const loadStored = <T,>(key: string, fallback: T): T => {
     try {
@@ -329,6 +330,14 @@ const App: React.FC = () => {
     setFixedTasks(prev => prev.filter(filterFn));
     setWishes(prev => prev.filter(filterFn));
   }, []);
+
+  // 重新设置基准的逻辑
+  const performBaselineReset = () => {
+    setState('onboarding');
+    setOnboardingStep('hours');
+    setShowBaselineSettings(false);
+    setShowResetConfirm(false);
+  };
 
   const renderTypeBadge = (task: Task) => {
     if (task.isHardBlock) {
@@ -614,12 +623,41 @@ const App: React.FC = () => {
                       ))}
                    </div>
                 </section>
+
+                {/* 增加重新设置按钮 */}
+                <section className="pt-6 border-t border-white/5 mt-4">
+                   <button 
+                     onClick={() => setShowResetConfirm(true)}
+                     className="w-full py-4 flex items-center justify-center gap-2 text-red-400/60 hover:text-red-400 hover:bg-red-400/5 rounded-2xl transition-all border border-red-400/10 text-xs font-bold uppercase tracking-widest"
+                   >
+                     <RefreshCw size={14} /> 重新开始本周校准流程
+                   </button>
+                </section>
              </div>
 
              <div className="pt-8 border-t border-white/5 mt-6">
                 <button onClick={() => setShowBaselineSettings(false)} className="w-full py-5 bg-white text-soul-deep rounded-2xl font-black text-lg shadow-glow active:scale-95 transition-all">关闭设定</button>
              </div>
           </div>
+        </div>
+      )}
+
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-[800] flex items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-300">
+           <div className="absolute inset-0 bg-soul-deep/80 backdrop-blur-xl" onClick={() => setShowResetConfirm(false)} />
+           <div className="relative w-full max-sm soul-glass p-10 rounded-[3rem] border-white/10 shadow-glow-lg text-center space-y-8">
+              <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center mx-auto text-red-400 border border-red-400/20 mb-2">
+                <AlertTriangle size={40} className="animate-pulse" />
+              </div>
+              <div className="space-y-3">
+                <h3 className="text-2xl font-black text-white italic tracking-tight">确认重新开始？</h3>
+                <p className="text-soul-muted/60 text-sm leading-relaxed italic">这会引导你重新校准活跃时间、固定日程和愿望清单。今日已有的执行记录不会被删除。</p>
+              </div>
+              <div className="flex flex-col gap-3">
+                <button onClick={performBaselineReset} className="w-full py-5 bg-red-500 text-white rounded-2xl font-black text-lg shadow-xl active:scale-95 transition-all">确定重新设置</button>
+                <button onClick={() => setShowResetConfirm(false)} className="w-full py-5 soul-glass border-white/5 text-white/40 rounded-2xl font-bold text-sm hover:text-white transition-all">返回</button>
+              </div>
+           </div>
         </div>
       )}
 
@@ -725,7 +763,7 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-3 gap-1.5">{(['low', 'medium', 'high'] as const).map(level => (<button key={level} onClick={() => setNewItemEnergy(level)} className={`py-1.5 rounded-lg border text-[8px] font-black transition-all ${newItemEnergy === level ? 'bg-soul-glow text-soul-deep border-soul-glow shadow-glow' : 'text-white/30 border-white/10'}`}>{level === 'low' ? '轻量' : level === 'medium' ? '常规' : '高耗'}</button>))}</div>
                 {onboardingStep === 'fixed' ? (
                   <div className="grid grid-cols-2 gap-3"><div className="soul-glass rounded-xl h-10 flex items-center justify-center border-white/5 overflow-hidden"><input type="time" value={newItemStart} onChange={(e) => setNewItemStart(e.target.value)} className="text-center text-xs h-full w-full bg-transparent" /></div><div className="soul-glass rounded-xl h-10 flex items-center justify-center border-white/5 overflow-hidden"><input type="time" value={newItemEnd} onChange={(e) => setNewItemEnd(e.target.value)} className="text-center text-xs h-full w-full bg-transparent" /></div></div>
-                ) : (<input type="number" value={newItemDuration} onChange={(e) => setNewItemDuration(parseInt(e.target.value)||30)} className="w-full soul-glass rounded-xl p-3 text-sm text-center font-black" placeholder="时长(分)" />)}
+                ) : (<input type="number" value={newItemDuration} onChange={(e) => setNewItemDuration(parseInt(e.target.value)||30)} className="w-full soul-glass rounded-xl p-3 text-sm" placeholder="时长(分)" />)}
                 <div className="flex gap-2"><button onClick={() => {if(!newItemTitle.trim()) return; const isFixed = onboardingStep === 'fixed'; const newTask: Task = { id: Math.random().toString(36).substr(2, 9), title: newItemTitle, duration: isFixed ? (([h1,m1],[h2,m2])=> (Number(h2)*60+Number(m2))-(Number(h1)*60+Number(m1)))(newItemStart.split(':'),newItemEnd.split(':')) : newItemDuration, energyCost: newItemEnergy, isHardBlock: isFixed, isWish: !isFixed, startTime: isFixed ? newItemStart : undefined, endTime: isFixed ? newItemEnd : undefined, recurringDays: isFixed ? [0, 1, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4, 5, 6] }; if (isFixed) setFixedTasks(prev => [...prev, newTask]); else setWishes(prev => [...prev, newTask]); setIsAddingOnboardingItem(false); setNewItemTitle('');}} className="flex-1 py-3 bg-soul-glow text-soul-deep rounded-xl font-black text-sm">确定</button><button onClick={() => setIsAddingOnboardingItem(false)} className="px-4 py-3 text-white/30 font-bold text-sm">取消</button></div>
               </div>
             )}

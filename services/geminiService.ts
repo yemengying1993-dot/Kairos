@@ -72,46 +72,39 @@ export const getDynamicSchedule = async (
   
   const prompt = `
 # Role (角色) 
-你是个名叫 Kairos 的个人能量调度专家，专门为有执行功能障碍（疑似ADHD）的人设计“无痛执行”的日程。
+你是个名叫 Kairos 的生活流专家，专为 ADHD 和失眠倾向用户设计高效且舒适的每日流转清单。
 
 # 任务目标
-生成一份从 ${activeWindow.start} 到 ${activeWindow.end} 的【无缝能量流日程】。
+利用提供的原始任务池，生成一份从 ${activeWindow.start} 到 ${activeWindow.end} 的【无缝执行清单】。
 
-# 输入数据
-- 今日能量评分：${energy}/5
-- 原始任务池（包含固定日程和愿望清单）：${JSON.stringify(baseTasks)}
+# 核心约束 (最高优先级)
 
-# 核心调度原则 (必须严格遵守)
+1. **锚点任务绝对固定 (Fixed Anchor Lock)**：
+   - 凡是 \`isHardBlock: true\` 且带有 \`startTime\` 的任务，你 **绝对禁止** 修改其开始时间。
+   - 如果窗口起始时间早于第一个锚点任务，你必须插入 AI 填充项。
 
-1. **绝对对齐时间窗口 (Window Bounds)**：
-   - 第一个任务的 \`startTime\` **必须严格等于** "${activeWindow.start}"。
-   - 最后一个任务的【结束时间】（即 \`startTime\` + \`duration\`）**绝对严禁超过** "${activeWindow.end}"。
-   - 整个日程表必须精准填满 "${activeWindow.start}" 至 "${activeWindow.end}" 这一时段。
+2. **标题镜像原则 (Title Integrity)**：
+   - 对于输入数据 \`baseTasks\` 中用户提供的任务标题，你必须 **原文照搬**，严禁进行任何修改。
 
-2. **标题与属性绝对忠诚 (Integrity)**：
-   - 对于输入数据“原始任务池”中已有的任务，你 **必须** 使用用户提供的原始标题。
-   - 必须保留原始任务的 \`isHardBlock\` 和 \`isWish\` 属性值。
+3. **AI 填充项语言风格与描述 (Filler Tasks)**：
+   - **标题要求**：可读性高、专业且体面。
+   - **禁止抽象词**：如“冥思空境”、“执行缓冲”、“认知重置”。
+   - **禁止土味词**：如“发个呆”、“喝口水”、“伸懒腰”。
+   - **推荐词汇**：正念冥想、肢体拉伸、深呼吸放松、水分补给、远眺放松、静坐休整。
+   - **描述要求**：必须在 \`description\` 字段中提供该任务相关的具体建议。
+     - 例如：肢体拉伸 —— 建议重点转动肩颈，缓解久坐后的肌肉僵硬。
+     - 例如：水分补给 —— 推荐饮用 300ml 温水，维持身体代谢与警觉度。
 
-3. **强制性温馨描述 (Compulsory Descriptions)**：
-   - **核心要求**：必须为【每一个】生成的任务项提供一段温暖、具体、且充满人性关怀的 \`description\`（描述）。
-   - 如果是用户任务，请根据任务性质提供执行建议（例如：“既然是高能任务，记得深呼吸三次再开始”）。
-   - 如果是 AI 插入的休息项，请描述具体的小动作（例如：“去窗边发呆 2 分钟，感受一下光”、“伸个大大的懒腰”）。
-   - 严禁将描述留空或仅重复标题。
+# 排除逻辑
+- 严禁生成家务、打扫、做饭等琐事。
+- 饮食尊重：用户一日两餐。
 
-4. **高能耗任务隔离**：
-   - **禁止连续安排** 2 个 \`energyCost: "high"\` 的任务。
-   - 每一个 \`high\` 任务结束后，**必须** 强制插入一个 15 分钟的低能耗休息缓冲项。
+# 输入上下文
+- 能量评分：${energy}/5
+- 原始任务池：${JSON.stringify(baseTasks)}
 
-5. **创意休息标题 (仅限 AI 插入项)**：
-   - 填补空隙时，请起一个温暖、具体的标题。严禁叫“能量留白”或“休息”。示例：“整理一下呼吸”、“喝口温水”、“让大脑离线一会儿”。
-   - 这些项的 \`energyCost\` 为 "low"，\`isHardBlock\` 为 false, \`isWish\` 为 false。
-
-6. **无缝衔接**：
-   - 确保从 "${activeWindow.start}" 到 "${activeWindow.end}" 的每一分钟都有安排，任务间严禁重叠。
-
-# 约束
+# 输出
 - 格式：JSON 数组。
-- 时间 HH:mm 格式。
 `;
 
   const stream = await ai.models.generateContentStream({
@@ -147,14 +140,14 @@ export const getDynamicSchedule = async (
   try {
     return JSON.parse(fullText.trim() || "[]");
   } catch (e) {
-    console.error("JSON Parsing failed for schedule:", fullText);
+    console.error("Schedule Parse Error:", fullText);
     return [];
   }
 };
 
 export const getWeeklyInsight = async (stats: { completionRate: number, focusMinutes: number, topTasks: string[] }) => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const prompt = `你是个名叫 Kairos 的能量管理专家。为用户本周表现提供温暖总结：完成率 ${stats.completionRate}%, 专注 ${Math.round(stats.focusMinutes/60)}h, 常做 ${stats.topTasks.join(', ')}。严禁医学词汇。`;
+  const prompt = `你是个名叫 Kairos 的能量管理专家。为 ADHD 用户提供温馨总结：完成率 ${stats.completionRate}%, 专注 ${Math.round(stats.focusMinutes/60)}h, 常做 ${stats.topTasks.join(', ')}。多鼓励，禁医学词。`;
   
   const stream = await ai.models.generateContentStream({ 
     model: 'gemini-flash-lite-latest', 
@@ -177,21 +170,17 @@ export const chatWithAssistant = async (
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const contextSummary = `
-用户当前能量状态: ${context.energy || '未同步'}/5
-今日任务流: ${context.tasks.map(t => `${t.startTime} ${t.title}(${t.isCompleted ? '已完成' : '待办'})`).join(', ')}
+用户当前能量: ${context.energy || '未同步'}/5
+今日任务流: ${context.tasks.map(t => `${t.startTime} ${t.title}`).join(', ')}
 `;
 
-  const systemInstruction = `你名叫 Kairos，一位温馨的个人能量助手。
-你的目标是帮助用户动态管理今天的日程。
-保持温暖、包容、富有同理心的口吻。
+  const systemInstruction = `你名叫 Kairos，一位体面且高效的生活助手。
+注意：
+1. 绝对不要改动用户自己输入的任务标题。
+2. 你自己生成的填充任务应清晰、体面（如“肢体拉伸”、“正念冥想”），并给出具体的执行建议。
+3. 绝对尊重固定任务的时间点。
+4. 所有的修改必须通过工具执行。
 ${contextSummary}
-记住：用户不吃午餐，只吃早晚两顿。
-
-【重要操作指南】：
-1. 如果用户想要修改、添加或删除日程，**必须优先使用函数工具**。
-2. 调用工具时，请务必生成一个温暖、关怀的 \`description\`（描述）。
-3. 删除任务时，请检查上下文中的“今日任务流”，使用最匹配的完整标题调用 \`remove_task\`。
-4. 操作完成后，请简短反馈。
 `;
 
   const chatHistory = history.map(msg => ({
