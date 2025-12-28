@@ -28,6 +28,25 @@ const getWeekNumber = (date: Date) => {
   return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 };
 
+// 辅助函数：清理超过 7 天的过期缓存
+const performCacheCleanup = () => {
+  const keys = Object.keys(localStorage);
+  const today = new Date();
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+  keys.forEach(key => {
+    if (key.startsWith('kairos_day_')) {
+      const dateStr = key.replace('kairos_day_', '');
+      const recordDate = new Date(dateStr);
+      // 如果日期解析成功且超过 7 天，则删除
+      if (!isNaN(recordDate.getTime()) && (today.getTime() - recordDate.getTime() > SEVEN_DAYS_MS)) {
+        console.log(`[Kairos] Purging old cache: ${key}`);
+        localStorage.removeItem(key);
+      }
+    }
+  });
+};
+
 // 辅助函数：播放专注完成音效
 const playCompletionSound = () => {
   try {
@@ -74,7 +93,12 @@ const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => {
     const lastOnboardingWeek = localStorage.getItem('kairos_week_done');
     const currentWeek = getWeekNumber(new Date());
-    if (lastOnboardingWeek !== currentWeek.toString()) return 'onboarding';
+    
+    // 如果是新的一周，执行缓存清理
+    if (lastOnboardingWeek !== currentWeek.toString()) {
+      performCacheCleanup();
+      return 'onboarding';
+    }
     
     const today = getLocalDateString(new Date());
     const saved = localStorage.getItem(`kairos_day_${today}`);
@@ -191,19 +215,53 @@ const App: React.FC = () => {
     setState('report');
     let totalTasks = 0, completedTasks = 0, focusMinutes = 0;
     const taskFrequency: Record<string, number> = {};
+
+    // 严格回溯过去 7 天
     for (let i = 0; i < 7; i++) {
-      const d = new Date(); d.setDate(d.getDate() - i);
-      const saved = localStorage.getItem(`kairos_day_${getLocalDateString(d)}`);
+      const d = new Date(); 
+      d.setDate(d.getDate() - i);
+      const dateKey = `kairos_day_${getLocalDateString(d)}`;
+      const saved = localStorage.getItem(dateKey);
+      
       if (saved) {
-        const record: DailyRecord = JSON.parse(saved);
-        record.tasks.forEach(t => { totalTasks++; if (t.isCompleted) { completedTasks++; focusMinutes += t.duration; taskFrequency[t.title] = (taskFrequency[t.title] || 0) + 1; } });
+        try {
+          const record: DailyRecord = JSON.parse(saved);
+          record.tasks.forEach(t => { 
+            totalTasks++; 
+            if (t.isCompleted) { 
+              completedTasks++; 
+              focusMinutes += t.duration; 
+              taskFrequency[t.title] = (taskFrequency[t.title] || 0) + 1; 
+            } 
+          });
+        } catch (e) {
+          console.error("Failed to parse history record", dateKey);
+        }
       }
     }
+    
     const rate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-    const topTasks = Object.entries(taskFrequency).sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => e[0]);
-    const insight = await getWeeklyInsight({ completionRate: rate, focusMinutes, topTasks });
-    setWeeklyStats({ completionRate: rate, focusHours: Math.round(focusMinutes / 60), insight });
-    setLoadingReport(false);
+    const topTasks = Object.entries(taskFrequency)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(e => e[0]);
+
+    try {
+      const insight = await getWeeklyInsight({ completionRate: rate, focusMinutes, topTasks });
+      setWeeklyStats({ 
+        completionRate: rate, 
+        focusHours: Math.round(focusMinutes / 60), 
+        insight 
+      });
+    } catch (e) {
+      setWeeklyStats({ 
+        completionRate: rate, 
+        focusHours: Math.round(focusMinutes / 60), 
+        insight: "回顾本周，每一个专注的瞬间都值得被铭记。继续保持你的节奏。" 
+      });
+    } finally {
+      setLoadingReport(false);
+    }
   };
 
   const handleCheckIn = async (score: EnergyLevel) => {
@@ -216,7 +274,7 @@ const App: React.FC = () => {
           ...t, 
           isCompleted: false, 
           energyCost: t.energyCost || 'medium',
-          description: t.description || '' // Ensure description is preserved
+          description: t.description || '' 
         })));
         setLastSyncedBaseline(currentBaselineHash);
         localStorage.setItem('kairos_last_synced_baseline', JSON.stringify(currentBaselineHash));
@@ -667,7 +725,7 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-3 gap-1.5">{(['low', 'medium', 'high'] as const).map(level => (<button key={level} onClick={() => setNewItemEnergy(level)} className={`py-1.5 rounded-lg border text-[8px] font-black transition-all ${newItemEnergy === level ? 'bg-soul-glow text-soul-deep border-soul-glow shadow-glow' : 'text-white/30 border-white/10'}`}>{level === 'low' ? '轻量' : level === 'medium' ? '常规' : '高耗'}</button>))}</div>
                 {onboardingStep === 'fixed' ? (
                   <div className="grid grid-cols-2 gap-3"><div className="soul-glass rounded-xl h-10 flex items-center justify-center border-white/5 overflow-hidden"><input type="time" value={newItemStart} onChange={(e) => setNewItemStart(e.target.value)} className="text-center text-xs h-full w-full bg-transparent" /></div><div className="soul-glass rounded-xl h-10 flex items-center justify-center border-white/5 overflow-hidden"><input type="time" value={newItemEnd} onChange={(e) => setNewItemEnd(e.target.value)} className="text-center text-xs h-full w-full bg-transparent" /></div></div>
-                ) : (<input type="number" value={newItemDuration} onChange={(e) => setNewItemDuration(parseInt(e.target.value)||30)} className="w-full soul-glass rounded-xl p-3 text-sm" placeholder="时长(分)" />)}
+                ) : (<input type="number" value={newItemDuration} onChange={(e) => setNewItemDuration(parseInt(e.target.value)||30)} className="w-full soul-glass rounded-xl p-3 text-sm text-center font-black" placeholder="时长(分)" />)}
                 <div className="flex gap-2"><button onClick={() => {if(!newItemTitle.trim()) return; const isFixed = onboardingStep === 'fixed'; const newTask: Task = { id: Math.random().toString(36).substr(2, 9), title: newItemTitle, duration: isFixed ? (([h1,m1],[h2,m2])=> (Number(h2)*60+Number(m2))-(Number(h1)*60+Number(m1)))(newItemStart.split(':'),newItemEnd.split(':')) : newItemDuration, energyCost: newItemEnergy, isHardBlock: isFixed, isWish: !isFixed, startTime: isFixed ? newItemStart : undefined, endTime: isFixed ? newItemEnd : undefined, recurringDays: isFixed ? [0, 1, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4, 5, 6] }; if (isFixed) setFixedTasks(prev => [...prev, newTask]); else setWishes(prev => [...prev, newTask]); setIsAddingOnboardingItem(false); setNewItemTitle('');}} className="flex-1 py-3 bg-soul-glow text-soul-deep rounded-xl font-black text-sm">确定</button><button onClick={() => setIsAddingOnboardingItem(false)} className="px-4 py-3 text-white/30 font-bold text-sm">取消</button></div>
               </div>
             )}
