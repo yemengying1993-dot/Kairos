@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { Task, EnergyLevel, ChatMessage } from "../types";
 
@@ -81,18 +80,17 @@ export const getDynamicSchedule = async (
 利用提供的原始任务池，生成一份从 ${activeWindow.start} 到 ${activeWindow.end} 的【无缝执行清单】。
 
 # 核心约束 (最高优先级)
-1. **锚点任务绝对固定 (Fixed Anchor Lock)**：凡是 \`isHardBlock: true\` 且带有 \`startTime\` 的任务，你禁止修改其开始时间。
+1. **锚点任务绝对固定 (Fixed Anchor Lock)**：凡是 \`isHardBlock: true\` 的任务，你必须【严格保留其原始的开始时间 startTime、结束时间 endTime 和时长 duration】，禁止进行任何拆分或修改。
 2. **标题镜像原则 (Title Integrity)**：用户提供的任务标题，你必须原文照搬，严禁修改。
 3. **时长上限与精准拆分 (Duration Cap & Precise Splitting)**：
-   - 任何生成的任务单次时长【绝对不得超过 60 分钟】。
-   - **90分钟任务专项准则**：如果一个任务（如愿望池任务）原始时长为 90 分钟，你必须将其拆分为【两段 45 分钟】的任务，中间插入休息。
-   - **一般拆分策略**：
-     - 能量 1-3（低/中）：长任务尽量拆为 30-45 分钟的短块。
-     - 能量 4-5（高）：长任务可拆为 60 分钟的块，但总和需覆盖原始时长。
+   - 【非锚点任务】的任何生成任务单次时长【绝对不得超过 60 分钟】。
+   - **愿望池任务 (isWish: true) 专项准则**：
+     - 如果一个愿望池任务原始时长为 90 分钟，你必须将其拆分为【两段 45 分钟】的任务，中间插入 10-20 分钟的休息或填充项。
+     - 如果一个愿望池任务时长超过 90 分钟（例如 120 分钟），你也可以根据情况将其拆分为多个不超过 60 分钟的段落，并在段落间插入休息。
    - 拆分后的任务片段应保持相同标题，并用 (1/2), (2/2) 标记。
 4. **能量节奏与间隙 (Energy Pacing & Recovery)**：
    - **严禁连续安排高能耗任务**：不允许两个 \`energyCost: 'high'\` 的任务紧挨着。
-   - **强制休息插入**：在每个高能耗任务之后，或在两个任务片段（如 45+45 的中间）之间，必须插入 10-20 分钟的“填充项/休息项”。
+   - **强制休息插入**：在每个高能耗任务之后，或在任务片段（如愿望池任务的 45+45 拆分中间）之间，必须插入 10-20 分钟的“填充项/休息项”。
    - **填充项示例**：深呼吸放松、水分补给、肢体拉伸、远眺窗外。标记为 \`energyCost: 'low'\`。
 5. **AI 填充项描述 (Filler Tasks)**：在 \`description\` 字段中提供具体且温馨的建议。
 
@@ -109,6 +107,7 @@ export const getDynamicSchedule = async (
       model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
+        thinkingConfig: { thinkingBudget: 0 }, // 提升速度
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.ARRAY,
@@ -145,7 +144,8 @@ export const getWeeklyInsight = async (stats: { completionRate: number, focusMin
   try {
     const response = await ai.models.generateContent({ 
       model: 'gemini-3-flash-preview', 
-      contents: prompt 
+      contents: prompt,
+      config: { thinkingConfig: { thinkingBudget: 0 } } // 提升速度
     });
     return response.text || "回顾本周，每一个专注的瞬间都值得被铭记。继续保持你的节奏。";
   } catch (e) {
@@ -169,9 +169,9 @@ export const chatWithAssistant = async (
   const systemInstruction = `你名叫 Kairos，一位体面且高效的生活助手。
 注意：
 1. 绝对不要改动用户自己输入的任务标题。
-2. 建议用户将 90 分钟的长任务拆分为两个 45 分钟的专注段。
+2. 建议用户将 90 分钟的长任务（尤其是愿望池任务）拆分为两个 45 分钟的专注段。
 3. 严禁连续安排高能耗任务。
-4. 任何生成的任务单项时长不要超过 60 分钟。
+4. 任何【非锚点任务】的生成的任务单项时长不要超过 60 分钟。
 5. 你自己生成的填充任务应清晰、体面（如“肢体拉伸”、“正念冥想”），并给出具体的执行建议。
 6. 所有的修改必须通过工具执行。
 ${contextSummary}
@@ -188,6 +188,7 @@ ${contextSummary}
       history: chatHistory,
       config: { 
         systemInstruction,
+        thinkingConfig: { thinkingBudget: 0 }, // 提升速度
         tools: [{ functionDeclarations: controlScheduleTools }]
       } 
     });

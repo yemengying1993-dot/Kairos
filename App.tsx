@@ -625,6 +625,7 @@ const App: React.FC = () => {
                               <p className="font-bold text-sm text-white/90">{task.title}</p>
                               <p className="text-[10px] text-white/30 flex items-center gap-2"><Timer size={10}/> {task.duration}M</p>
                            </div>
+                           {renderEnergyBadge(task.energyCost)} {/* Added energy badge here */}
                            <button onClick={() => setWishes(p => p.filter(t => t.id !== task.id))} className="p-2 text-white/10 hover:text-red-400 transition-colors"><Trash2 size={16} /></button>
                         </div>
                       ))}
@@ -680,7 +681,7 @@ const App: React.FC = () => {
                   <div className="soul-glass rounded-xl h-12 flex items-center justify-center border-white/5 overflow-hidden relative"><input type="time" value={newItemStart} onChange={(e) => setNewItemStart(e.target.value)} className="text-center text-sm h-full w-full bg-transparent" /></div>
                   <div className="soul-glass rounded-xl h-12 flex items-center justify-center border-white/5 overflow-hidden relative"><input type="time" value={newItemEnd} onChange={(e) => setNewItemEnd(e.target.value)} className="text-center text-sm h-full w-full bg-transparent" /></div>
                 </div>
-              ) : (<input type="number" value={newItemDuration} onChange={(e) => setNewItemDuration(parseInt(e.target.value)||30)} className="w-full soul-glass rounded-xl p-3 text-sm text-center font-black" placeholder="时长(分)" />)}
+              ) : (<input type="number" value={newItemDuration} onChange={(e) => setNewItemDuration(parseInt(e.target.value)||30)} className="w-full soul-glass rounded-xl p-3 text-sm text-center font-bold" placeholder="时长(分)" />)}
               <div className="flex gap-2"><button onClick={() => {if(!newItemTitle.trim()) return; const isFixed = onboardingStep === 'fixed'; const newTask: Task = { id: Math.random().toString(36).substr(2, 9), title: newItemTitle, duration: isFixed ? (([h1,m1],[h2,m2])=> (Number(h2)*60+Number(m2))-(Number(h1)*60+Number(m1)))(newItemStart.split(':'),newItemEnd.split(':')) : newItemDuration, energyCost: newItemEnergy, isHardBlock: isFixed, isWish: !isFixed, startTime: isFixed ? newItemStart : undefined, endTime: isFixed ? newItemEnd : undefined, recurringDays: isFixed ? [0, 1, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4, 5, 6] }; if (isFixed) setFixedTasks(prev => [...prev, newTask]); else setWishes(prev => [...prev, newTask]); setIsAddingOnboardingItem(false); setNewItemTitle('');}} className="flex-1 py-3 bg-soul-glow text-soul-deep rounded-xl font-black text-sm">确定</button><button onClick={() => setIsAddingOnboardingItem(false)} className="px-4 py-3 text-white/30 font-bold text-sm">取消</button></div>
            </div>
         </div>
@@ -769,7 +770,30 @@ const App: React.FC = () => {
         {onboardingStep !== 'hours' && (
           <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar animate-in slide-in-from-right-10">
             {(onboardingStep === 'fixed' ? fixedTasks : wishes).map((task) => (
-              <div key={task.id} className="flex flex-col p-4 soul-glass rounded-xl border-white/5 text-left group gap-1.5"><div className="flex justify-between items-start"><div className="space-y-1"><p className="font-bold text-white/90 text-sm">{task.title}</p><p className="text-[10px] text-white/30">{task.isHardBlock ? (<span className="flex items-center gap-1.5"><Calendar size={10} className="text-soul-glow/50" />{task.recurringDays?.length === 7 ? '每天' : `周${task.recurringDays?.map(d => WEEK_DAYS[d]).join('')}`}<span className="mx-1 opacity-30">|</span><Clock size={10} className="text-soul-glow/50" />{task.startTime} - {task.endTime}</span>) : `${task.duration}M`}</p></div><button onClick={() => onboardingStep === 'fixed' ? setFixedTasks(p => p.filter(t=>t.id!==task.id)) : setWishes(p => p.filter(t=>t.id!==task.id))} className="text-white/10 hover:text-red-400 transition-colors"><Trash2 size={16} /></button></div></div>
+              <div key={task.id} className="flex flex-col p-4 soul-glass rounded-xl border-white/5 text-left group gap-1.5">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <p className="font-bold text-white/90 text-sm">{task.title}</p>
+                    <p className="text-[10px] text-white/30">
+                      {task.isHardBlock ? (
+                        <span className="flex items-center gap-1.5">
+                          <Calendar size={10} className="text-soul-glow/50" />
+                          {task.recurringDays?.length === 7 ? '每天' : `周${task.recurringDays?.map(d => WEEK_DAYS[d]).join('')}`}
+                          <span className="mx-1 opacity-30">|</span>
+                          <Clock size={10} className="text-soul-glow/50" />
+                          {task.startTime} - {task.endTime}
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5">
+                          <Timer size={10}/> {task.duration}M
+                          {renderEnergyBadge(task.energyCost)} {/* Added energy badge for wishes */}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <button onClick={() => onboardingStep === 'fixed' ? setFixedTasks(p => p.filter(t=>t.id!==task.id)) : setWishes(p => p.filter(t=>t.id!==task.id))} className="text-white/10 hover:text-red-400 transition-colors"><Trash2 size={16} /></button>
+                </div>
+              </div>
             ))}
             {!isAddingOnboardingItem ? (
               <button onClick={() => setIsAddingOnboardingItem(true)} className="w-full py-6 bg-white/5 border-2 border-dashed border-white/10 rounded-[1.5rem] text-white/20 flex items-center justify-center gap-2 hover:text-soul-glow transition-all font-bold text-sm text-center"><Plus size={20} /> 添加基准</button>
